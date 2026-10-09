@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 5 * * 1' # weekly: catches dependency and specification changes
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Coding style, static analysis, audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: json, mbstring, openssl, zip, curl
+          coverage: none
+      - run: composer validate --strict
+      - uses: ramsey/composer-install@v3
+      - run: vendor/bin/php-cs-fixer check --diff
+      - run: vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+      - run: composer audit
+
+  tests:
+    name: PHP ${{ matrix.php }} (${{ matrix.dependencies }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
+        dependencies: [lowest, highest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: json, mbstring, openssl, zip
+          coverage: none
+      - uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: ${{ matrix.dependencies }}
+      - run: vendor/bin/phpunit --testsuite unit
+
+  contract:
+    name: Contract tests against official specifications
+    runs-on: ubuntu-latest
+    # gov.pl / poczta-polska.pl may be unreachable from CI runners; a failure here means
+    # "investigate", not "the SDK is broken". A "CHANGED" message means the publisher updated a document.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: json, mbstring, openssl, zip, curl
+          coverage: none
+      - uses: ramsey/composer-install@v3
+      - run: composer specs:fetch
+      - run: vendor/bin/phpunit --testsuite contract

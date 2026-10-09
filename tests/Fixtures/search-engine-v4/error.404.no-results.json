@@ -1,0 +1,11 @@
+{
+  "httpCode": "404",
+  "id": "0d8f2f4e-2b7f-4a3c-9a43-2f9a8d3c1b11",
+  "errorCodes": [
+    {
+      "errorCode": "SEAPI-00010",
+      "language": "GB",
+      "message": "No results found. Please apply less strict criteria"
+    }
+  ]
+}

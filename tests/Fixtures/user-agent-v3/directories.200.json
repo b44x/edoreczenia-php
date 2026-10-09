@@ -1,0 +1,4 @@
+[
+  { "directoryId": "1", "name": "Odebrane", "label": "INBOX", "type": "predefined" },
+  { "directoryId": "42", "name": "Faktury", "label": "MOJ_NOWY_FOLDER", "type": "defined" }
+]

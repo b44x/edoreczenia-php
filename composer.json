@@ -1,0 +1,87 @@
+{
+    "name": "b44x/edoreczenia",
+    "description": "Unofficial, framework-agnostic PHP SDK for the Polish e-Doręczenia (e-Delivery) APIs: signed-JWT system authentication and Search Engine API v4.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "e-doreczenia",
+        "edoreczenia",
+        "e-delivery",
+        "poland",
+        "ezd",
+        "ade",
+        "psr-18",
+        "sdk"
+    ],
+    "authors": [
+        {
+            "name": "Michell Hoduń",
+            "homepage": "https://github.com/b44x"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/b44x/edoreczenia-php/issues",
+        "source": "https://github.com/b44x/edoreczenia-php",
+        "security": "https://github.com/b44x/edoreczenia-php/security/policy"
+    },
+    "require": {
+        "php": "^8.3",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
+        "psr/clock": "^1.0",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.1",
+        "psr/http-message": "^1.1 || ^2.0",
+        "psr/log": "^2.0 || ^3.0",
+        "psr/simple-cache": "^2.0 || ^3.0"
+    },
+    "require-dev": {
+        "ext-zip": "*",
+        "friendsofphp/php-cs-fixer": "^3.90",
+        "guzzlehttp/guzzle": "^7.9 || ^8.0",
+        "nyholm/psr7": "^1.8.2",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^12.5 || ^13.0",
+        "symfony/yaml": "^7.3 || ^8.0"
+    },
+    "suggest": {
+        "guzzlehttp/guzzle": "A ready-to-use PSR-18 HTTP client with PSR-17 factories",
+        "symfony/http-client": "Another PSR-18 capable HTTP client (combine with nyholm/psr7 for PSR-17 factories)",
+        "monolog/monolog": "PSR-3 logger for redacted request diagnostics",
+        "symfony/cache": "PSR-16 cache to share access tokens between PHP processes"
+    },
+    "autoload": {
+        "psr-4": {
+            "B4x\\Edoreczenia\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "B4x\\Edoreczenia\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {}
+    },
+    "scripts": {
+        "test": "phpunit --testsuite unit",
+        "test:contract": "phpunit --testsuite contract",
+        "test:integration": "phpunit --testsuite integration",
+        "analyse": "phpstan analyse --memory-limit=512M",
+        "cs": "php-cs-fixer check --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "specs:fetch": "@php tools/fetch-specs.php",
+        "check": [
+            "@composer validate --strict",
+            "@cs",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

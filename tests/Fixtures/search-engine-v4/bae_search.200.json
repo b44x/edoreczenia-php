@@ -1,0 +1,55 @@
+{
+  "baeSearchResponses": [
+    {
+      "recipientEda": {
+        "recipientEda": "AE:PL-98765-43210-SFVYC-19",
+        "isMainEda": true,
+        "assignmentDegree": "3",
+        "edaStatus": "ACTIVE",
+        "designatedOperator": true,
+        "dateOfEnteringToBAE": "2024-01-15",
+        "warning": {
+          "code": "SEAPI_INFO-00001",
+          "type": "NOT_BLOCK_WARNING",
+          "description": "Sending may fail between non-public sender or recipient, if public ERDS is in use."
+        },
+        "additionalServiceOW": {
+          "activationDate": "2025-02-01"
+        }
+      },
+      "baeSearchData": [
+        {
+          "index": 2,
+          "isPublic": true,
+          "entityName": "MINISTERSTWO POCZT I TELEGRAFÓW (NAZWA ARCHIWALNA)",
+          "legalForm": "ORGAN ADMINISTRACJI RZĄDOWEJ"
+        },
+        {
+          "index": 1,
+          "isPublic": true,
+          "entityName": "MINISTERSTWO POCZT I TELEGRAFÓW",
+          "legalForm": "ORGAN ADMINISTRACJI RZĄDOWEJ",
+          "officialIds": [
+            { "id": "5232958825", "referenceRegistry": "nip" }
+          ],
+          "nipStatus": "ASSIGNED",
+          "address": [
+            {
+              "addressType": ["headquarters", "correspondence"],
+              "countryCode": "PL",
+              "street": "POLNA",
+              "typeOfStreet": "STREET",
+              "postalCode": "05-569",
+              "city": "WARSZAWA",
+              "buildingNumber": "12AA",
+              "voivodeship": "MAZOWIECKIE",
+              "district": "MIŃSKI",
+              "community": "HALINÓW"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "totalResults": 1
+}

@@ -1,0 +1,46 @@
+{
+  "messages": [
+    {
+      "messageControlData": {
+        "opened": false,
+        "status": "Doręczona",
+        "messageType": "Message",
+        "daysToReceive": 12,
+        "labels": [ { "label": "INBOX" } ]
+      },
+      "messageMetadata": {
+        "from": {
+          "eDeliveryAddress": "AE:PL-98765-43210-SFVYC-19",
+          "contributor": { "companyName": "MINISTERSTWO POCZT I TELEGRAFÓW" }
+        },
+        "to": [
+          { "eDeliveryAddress": "AE:PL-12345-67890-ABCDE-12", "contributor": { "firstName": "ADAM", "lastName": "MALINOWSKI" } }
+        ],
+        "subject": "Wezwanie",
+        "messageId": "D41568F4-7175-42BB-9503-DAA282180D70",
+        "threadId": "T-1",
+        "timestamp": "2017-07-21T17:32:28Z",
+        "submissionDate": "2017-07-21T17:32:28Z",
+        "eventDate": "2017-07-21T17:32:28Z",
+        "shippingService": "electronic"
+      }
+    },
+    {
+      "messageControlData": {
+        "opened": true,
+        "status": "Odrzucona",
+        "statusDescription": "Nieprawidłowy format pliku;Invalid file format",
+        "messageType": "Message",
+        "labels": [ { "label": "SENT", "messageLocation": "MOJ_NOWY_FOLDER" } ]
+      },
+      "messageMetadata": {
+        "messageId": "0A1B2C3D-0000-4000-8000-000000000001",
+        "subject": "Odpowiedź",
+        "shippingService": "hybrid"
+      }
+    }
+  ],
+  "resultSize": 2,
+  "total": 2,
+  "electronicCount": 1
+}

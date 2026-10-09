@@ -1,0 +1,11 @@
+{
+  "httpCode": "400",
+  "id": "7770c1c4-e07b-479d-a496-a69eb9488366",
+  "errorCodes": [
+    {
+      "errorCode": "SEAPI-00007",
+      "language": "GB",
+      "message": "No mandatory search arguments provided to use Search Subset 1.4."
+    }
+  ]
+}

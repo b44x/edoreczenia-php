@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/b44x/edoreczenia-php/security/advisories/new
+    about: Report vulnerabilities privately.
+  - name: Problems with e-Doręczenia services (INT/PROD)
+    url: https://pomoc.coi.gov.pl
+    about: Outages and service incidents are handled by COI (ITSM Atmosfera), not by this project.

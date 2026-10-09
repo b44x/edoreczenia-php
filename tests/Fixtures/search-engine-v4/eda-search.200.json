@@ -1,0 +1,35 @@
+{
+  "edaSearchResponses": [
+    {
+      "recipientEda": {
+        "recipientEda": "AE:PL-12345-67890-ABCDE-10",
+        "edaStatus": "ACTIVE",
+        "designatedOperator": true
+      },
+      "recipient": {
+        "isPublic": true,
+        "entityName": "MINISTERSTWO POCZT I TELEGRAFÓW",
+        "officialIds": [
+          { "id": "5232958825", "referenceRegistry": "nip" }
+        ]
+      }
+    },
+    {
+      "recipientEda": {
+        "recipientEda": "AE:PL-12345-67890-ABCDE-11",
+        "edaStatus": "CLOSED_RECOVERABLE",
+        "designatedOperator": false,
+        "warning": {
+          "code": "SEAPI_INFO-00004",
+          "type": "BLOCK_WARNING",
+          "description": "ADE is inactive and not supported by any ERDS service."
+        }
+      },
+      "recipient": {
+        "isPublic": false,
+        "entityName": "NAZWA PODMIOTU"
+      }
+    }
+  ],
+  "totalResults": 2
+}

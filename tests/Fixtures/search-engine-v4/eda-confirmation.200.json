@@ -1,0 +1,29 @@
+{
+  "recipientEda": {
+    "recipientEda": "AE:PL-12345-67890-ABCDE-12",
+    "isMainEda": true,
+    "assignmentDegree": "3",
+    "edaStatus": "ACTIVE",
+    "designatedOperator": true,
+    "dateOfEnteringToBAE": "2024-01-15"
+  },
+  "recipient": {
+    "isPublic": false,
+    "entityName": "NAZWA PODMIOTU",
+    "legalForm": "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "officialIds": [
+      { "id": "5232958825", "referenceRegistry": "nip" }
+    ],
+    "nipStatus": "ASSIGNED",
+    "address": [
+      {
+        "addressType": ["headquarters"],
+        "countryCode": "PL",
+        "city": "WARSZAWA",
+        "street": "POLNA",
+        "buildingNumber": "12AA",
+        "postalCode": "05-569"
+      }
+    ]
+  }
+}

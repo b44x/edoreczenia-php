@@ -1,0 +1,8 @@
+/vendor/
+/composer.lock
+/build/
+/.phpunit.cache/
+/.php-cs-fixer.cache
+/.env
+*.pem
+*.key

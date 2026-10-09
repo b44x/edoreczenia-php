@@ -1,0 +1,11 @@
+{
+  "httpCode": "504",
+  "id": "5b0b3c1e-61d8-4d9a-8f8e-7d0b0b2a4c55",
+  "errorCodes": [
+    {
+      "errorCode": "SEAPI-00013",
+      "language": "GB",
+      "message": "Sorry, the service is overloaded. Please try again later"
+    }
+  ]
+}

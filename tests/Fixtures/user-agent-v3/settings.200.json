@@ -1,0 +1,5 @@
+{
+  "phoneNumber": "+48000000000",
+  "email": "skrzynka@example.test",
+  "settings": { "totalCapacity": "1024", "usedCapacity": "12.5" }
+}
