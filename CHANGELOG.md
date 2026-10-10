@@ -5,6 +5,15 @@ and the project uses [Semantic Versioning](https://semver.org/) (during 0.x, a m
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-10
+
+Same code as 0.2.0, published from the cleaned repository history. Versions 0.1.0 and 0.2.0 were withdrawn from
+Packagist because their tags were moved; please require `^0.2.1`.
+
+### Changed
+
+- Repository history consolidated into one commit per release; no changes to the library code.
+
 ## [0.2.0] - 2026-10-10
 
 Read-only User Agent API v3 completed. **Still not verified against the INT or PROD environments.**
@@ -44,6 +53,7 @@ First public pre-release. **Not yet verified against the INT or PROD environment
 - `composer specs:fetch`: hash-verified download of the official contracts; contract test suite.
 - README in English and Polish, contribution guide and security policy.
 
-[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/b44x/edoreczenia-php/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/b44x/edoreczenia-php/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/b44x/edoreczenia-php/releases/tag/v0.1.0
