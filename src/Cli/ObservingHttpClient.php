@@ -29,6 +29,9 @@ final class ObservingHttpClient implements ClientInterface
         private readonly ClockInterface $clock,
     ) {}
 
+    /** IMF-fixdate (RFC 9110), always GMT; DATE_RFC7231 is deprecated since PHP 8.5. */
+    private const HTTP_DATE = 'D, d M Y H:i:s \\G\\M\\T';
+
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         $this->lastEndpoint = Transport::redactUri((string) $request->getUri());
@@ -39,7 +42,7 @@ final class ObservingHttpClient implements ClientInterface
 
         $date = $response->getHeaderLine('Date');
         if ($date !== '') {
-            $parsed = \DateTimeImmutable::createFromFormat(\DATE_RFC7231, $date, new \DateTimeZone('UTC'));
+            $parsed = \DateTimeImmutable::createFromFormat(self::HTTP_DATE, $date, new \DateTimeZone('UTC'));
             if ($parsed !== false) {
                 $this->serverDate = $parsed;
                 $this->localDate = $this->clock->now();

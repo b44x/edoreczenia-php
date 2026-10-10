@@ -68,6 +68,15 @@ final class FakeEdoreczeniaTest extends TestCase
         self::assertMatchesRegularExpression('/^Bearer fake-[0-9a-f]+$/', $requests[1]->getHeaderLine('Authorization'));
     }
 
+    public function testSystemCredentialsWithOnlyAClientDetectFactories(): void
+    {
+        $credentials = new SystemCredentials(self::MAILBOX, 'EZD', PrivateKey::fromPem(TestKeys::rsa()['private']));
+        $client = EdoreczeniaClient::withSystemCredentials(Environment::integration(), $credentials, $this->fake);
+
+        self::assertSame(self::MAILBOX, $client->searchEngine()->getOwnAddressDetails()->address->address);
+        self::assertCount(2, $this->fake->requests());
+    }
+
     public function testTokenEndpointRespondsLikeKeycloak(): void
     {
         $credentials = new SystemCredentials(self::MAILBOX, 'EZD', PrivateKey::fromPem(TestKeys::rsa()['private']));
@@ -303,6 +312,13 @@ final class FakeEdoreczeniaTest extends TestCase
 
         $zip = $ua->downloadTechnicalEvidences(self::MESSAGE_ID);
         self::assertSame('application/zip', $zip->contentType);
+        if (!class_exists(\ZipArchive::class)) {
+            $bytes = (string) $zip->stream;
+            self::assertStringStartsWith("PK\x03\x04", $bytes);
+            self::assertStringContainsString('README.txt', $bytes);
+
+            return;
+        }
         $path = tempnam(sys_get_temp_dir(), 'fake-zip');
         self::assertIsString($path);
         try {

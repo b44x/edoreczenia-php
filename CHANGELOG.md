@@ -5,6 +5,24 @@ and the project uses [Semantic Versioning](https://semver.org/) (during 0.x, a m
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-10
+
+Developer experience: automatic HTTP client detection, a test fake and a command line tool.
+**Still not verified against the INT or PROD environments.**
+
+### Added
+
+- HTTP client detection: `EdoreczeniaClient::withSystemCredentials()` now takes the PSR-18 client and PSR-17 factories
+  as optional arguments. When omitted, an installed Guzzle or Symfony HttpClient is used (30 s total, 10 s connect
+  timeout); missing factories are taken from Guzzle PSR-7 or Nyholm PSR-7. Without any of them,
+  `HttpClientNotFoundException` explains what to install. A client you pass is never changed.
+- `B4x\Edoreczenia\Testing\FakeEdoreczenia`: in-memory PSR-18 fake of the token endpoint, SE API v4 and the read-only
+  UA API v3 with synthetic data, one-shot failure injection (`failNext()`) and request recording (`requests()`).
+- `vendor/bin/edoreczenia` command line tool:
+  - `keygen` generates an RSA 2048 key (mode 0600, optionally encrypted) and a matching CSR for the permission module;
+  - `doctor` checks key, client id, token, clock skew and one read-only SE API call, and prints an incident report
+    without credentials when a step fails.
+
 ## [0.2.1] - 2026-10-10
 
 First version available on Packagist; the code is identical to 0.2.0. Require `^0.2.1`.
@@ -48,7 +66,8 @@ First public pre-release. **Not yet verified against the INT or PROD environment
 - `composer specs:fetch`: hash-verified download of the official contracts; contract test suite.
 - README in English and Polish, contribution guide and security policy.
 
-[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/b44x/edoreczenia-php/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/b44x/edoreczenia-php/releases/tag/v0.2.1
 [0.2.0]: https://github.com/b44x/edoreczenia-php/commit/34db3797e72ae943b8cb35bf18e90c3b12bd77d8
 [0.1.0]: https://github.com/b44x/edoreczenia-php/commit/b4c2c3973f87816fc6fdf6bfac9cad999f467057

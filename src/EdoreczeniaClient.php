@@ -8,7 +8,9 @@ use B4x\Edoreczenia\Auth\AccessTokenProvider;
 use B4x\Edoreczenia\Auth\SignedJwtTokenProvider;
 use B4x\Edoreczenia\Auth\SystemCredentials;
 use B4x\Edoreczenia\Config\Environment;
+use B4x\Edoreczenia\Exception\HttpClientNotFoundException;
 use B4x\Edoreczenia\Exception\InvalidArgumentException;
+use B4x\Edoreczenia\Http\HttpStack;
 use B4x\Edoreczenia\Http\RetryPolicy;
 use B4x\Edoreczenia\Internal\Transport;
 use B4x\Edoreczenia\SearchEngine\V4\SearchEngineClient;
@@ -24,7 +26,7 @@ use Psr\SimpleCache\CacheInterface;
 /**
  * Entry point of the SDK, bound to one environment and one mailbox (ADE).
  *
- * The HTTP client is injected (PSR-18). Timeouts, proxies and TLS settings belong to that
+ * The HTTP client is injected (PSR-18); {@see withSystemCredentials()} can also detect an installed one. Timeouts, proxies and TLS settings belong to that
  * client; the SDK never alters them and never disables certificate verification.
  */
 final class EdoreczeniaClient
@@ -66,19 +68,30 @@ final class EdoreczeniaClient
     /**
      * Client authenticating as a system registered in the mailbox (signed JWT, RFC 7523).
      *
+     * The HTTP client and factories are optional. When omitted, an installed Guzzle or Symfony
+     * HttpClient is used with a 30 s total and 10 s connect timeout. Pass your own client to
+     * control timeouts, proxies or TLS.
+     *
      * @param CacheInterface|null $tokenCache optional PSR-16 cache to share the access token between processes
+     *
+     * @throws HttpClientNotFoundException when no client is passed and none is installed
      */
     public static function withSystemCredentials(
         Environment $environment,
         SystemCredentials $credentials,
-        ClientInterface $httpClient,
-        RequestFactoryInterface $requestFactory,
-        StreamFactoryInterface $streamFactory,
+        ?ClientInterface $httpClient = null,
+        ?RequestFactoryInterface $requestFactory = null,
+        ?StreamFactoryInterface $streamFactory = null,
         ?LoggerInterface $logger = null,
         ?RetryPolicy $retryPolicy = null,
         ?CacheInterface $tokenCache = null,
         ?ClockInterface $clock = null,
     ): self {
+        $http = HttpStack::resolve($httpClient, $requestFactory, $streamFactory);
+        $httpClient = $http->client;
+        $requestFactory = $http->requestFactory;
+        $streamFactory = $http->streamFactory;
+
         $tokenProvider = new SignedJwtTokenProvider(
             $credentials,
             $environment,

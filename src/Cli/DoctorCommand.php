@@ -10,6 +10,7 @@ use B4x\Edoreczenia\Auth\SystemCredentials;
 use B4x\Edoreczenia\Config\Environment;
 use B4x\Edoreczenia\EdoreczeniaClient;
 use B4x\Edoreczenia\Exception\ApiException;
+use B4x\Edoreczenia\Http\HttpStack;
 use B4x\Edoreczenia\Internal\Transport;
 use B4x\Edoreczenia\SearchEngine\V4\Enum\EdaStatus;
 use Psr\Clock\ClockInterface;

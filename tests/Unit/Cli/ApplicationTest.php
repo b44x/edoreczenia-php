@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace B4x\Edoreczenia\Tests\Unit\Cli;
 
 use B4x\Edoreczenia\Cli\Application;
-use B4x\Edoreczenia\Cli\HttpStack;
+use B4x\Edoreczenia\Http\HttpStack;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

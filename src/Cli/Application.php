@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace B4x\Edoreczenia\Cli;
 
+use B4x\Edoreczenia\Http\HttpStack;
 use B4x\Edoreczenia\Internal\SystemClock;
 use Psr\Clock\ClockInterface;
 
