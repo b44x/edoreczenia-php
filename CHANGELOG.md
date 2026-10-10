@@ -7,12 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org/) (during 0.x, a m
 
 ## [0.2.1] - 2026-10-10
 
-Same code as 0.2.0, published from the cleaned repository history. Versions 0.1.0 and 0.2.0 were withdrawn from
-Packagist because their tags were moved; please require `^0.2.1`.
-
-### Changed
-
-- Repository history consolidated into one commit per release; no changes to the library code.
+First version available on Packagist; the code is identical to 0.2.0. Require `^0.2.1`.
 
 ## [0.2.0] - 2026-10-10
 
@@ -54,6 +49,6 @@ First public pre-release. **Not yet verified against the INT or PROD environment
 - README in English and Polish, contribution guide and security policy.
 
 [Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/b44x/edoreczenia-php/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/b44x/edoreczenia-php/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/b44x/edoreczenia-php/releases/tag/v0.1.0
+[0.2.1]: https://github.com/b44x/edoreczenia-php/releases/tag/v0.2.1
+[0.2.0]: https://github.com/b44x/edoreczenia-php/commit/34db3797e72ae943b8cb35bf18e90c3b12bd77d8
+[0.1.0]: https://github.com/b44x/edoreczenia-php/commit/b4c2c3973f87816fc6fdf6bfac9cad999f467057
