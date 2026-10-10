@@ -10,5 +10,6 @@ parameters:
         - tests
         - tools
         - examples
+        - bin/edoreczenia
     tmpDir: build/phpstan
     treatPhpDocTypesAsCertain: false

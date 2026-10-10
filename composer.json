@@ -53,6 +53,9 @@
         "monolog/monolog": "PSR-3 logger for redacted request diagnostics",
         "symfony/cache": "PSR-16 cache to share access tokens between PHP processes"
     },
+    "bin": [
+        "bin/edoreczenia"
+    ],
     "autoload": {
         "psr-4": {
             "B4x\\Edoreczenia\\": "src/"
