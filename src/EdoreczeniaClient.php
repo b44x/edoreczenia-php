@@ -125,7 +125,7 @@ final class EdoreczeniaClient
     }
 
     /**
-     * User Agent API v3 – read-only operations of the configured mailbox.
+     * User Agent API v3 of the configured mailbox. Opening a message has legal effect; see {@see UserAgentClient::openMessage()}.
      *
      * Implemented from the official contract; not yet verified against a live environment.
      */

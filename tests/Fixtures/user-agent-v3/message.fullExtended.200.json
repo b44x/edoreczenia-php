@@ -1,0 +1,30 @@
+[
+  {
+    "messageControlData": {
+      "opened": true,
+      "status": "Doręczona",
+      "messageType": "Message"
+    },
+    "messageMetadata": {
+      "messageId": "D41568F4-7175-42BB-9503-DAA282180D70",
+      "subject": "Wezwanie",
+      "shippingService": "electronic"
+    },
+    "textBody": "Syntetyczna treść wiadomości. Synthetic message body.",
+    "attachments": [
+      {
+        "order": 1,
+        "attachmentId": "ATT-1",
+        "file": {
+          "fileMetadata": {
+            "fileId": "F-1",
+            "filename": "wezwanie.pdf",
+            "contentType": "application/pdf",
+            "size": 18
+          },
+          "file": "JVBERi0xLjQgc3ludGhldGlj"
+        }
+      }
+    ]
+  }
+]

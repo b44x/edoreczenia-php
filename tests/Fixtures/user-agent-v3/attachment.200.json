@@ -1,0 +1,15 @@
+{
+  "order": 1,
+  "attachmentId": "ATT-1",
+  "file": {
+    "fileMetadata": {
+      "fileId": "F-1",
+      "filename": "wezwanie.pdf",
+      "contentType": "application/pdf",
+      "size": 18,
+      "alg": "SHA-3",
+      "hash": "c3ludGhldGljLWhhc2g="
+    },
+    "file": "JVBERi0xLjQgc3ludGhldGlj"
+  }
+}

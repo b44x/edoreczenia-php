@@ -19,8 +19,8 @@ use Psr\Http\Message\StreamFactoryInterface;
 /**
  * In-memory PSR-18 client emulating e-Doręczenia for offline tests of your own integration.
  *
- * It answers the token endpoint, Search Engine API v4 and the read-only User Agent API v3 with the
- * synthetic dataset of {@see SyntheticData}; nothing is sent over the network. Routes are matched
+ * It answers the token endpoint, Search Engine API v4 and the User Agent API v3 operations supported by
+ * the SDK with the synthetic dataset of {@see SyntheticData}; nothing is sent over the network. Routes are matched
  * by path suffix, so every {@see Environment} (production, integration, custom) is served.
  *
  * What it checks, like the real services:
@@ -31,10 +31,12 @@ use Psr\Http\Message\StreamFactoryInterface;
  *    eda-confirmation, recipient address counts;
  *  - UA API: the mailbox in the path equals the token's mailbox, known message/thread/evidence ids.
  *
- * Any non-GET request to the User Agent API fails with HTTP 405: the SDK never opens, sends or
- * deletes messages, so such a request in your tests means something bypassed it.
+ * Opening a message (format "full" or "fullExtended") is recorded: the message is listed as opened
+ * afterwards. {@see SyntheticData::PENDING_MESSAGE_ID} answers HTTP 202 to its first opening. Attachments
+ * are served as JSON and through POST attachments/download. Any other non-GET request to the User Agent API
+ * fails with HTTP 405, so such a request in your tests means something bypassed the SDK.
  *
- * Token lifetimes are not enforced and the data is static: it is a test double, not a simulator.
+ * Token lifetimes are not enforced and the data is otherwise static: it is a test double, not a simulator.
  */
 final class FakeEdoreczenia implements ClientInterface
 {
@@ -51,6 +53,12 @@ final class FakeEdoreczenia implements ClientInterface
 
     /** @var list<RequestInterface> */
     private array $requests = [];
+
+    /** @var array<string, true> ids of messages opened through this fake */
+    private array $openedMessages = [];
+
+    /** @var array<string, true> ids of messages that already answered HTTP 202 */
+    private array $pendingAnswered = [];
 
     /**
      * @param RequestFactoryInterface|null $requestFactory needed by {@see createClient()} only when neither
@@ -301,9 +309,13 @@ final class FakeEdoreczenia implements ClientInterface
      */
     private function userAgent(RequestInterface $request, array $segments, string $path): ResponseInterface
     {
+        $receiving = $this->receiving($request, $segments);
+        if ($receiving !== null) {
+            return $receiving;
+        }
         if ($request->getMethod() !== 'GET') {
             return $this->uaError(405, 'method_not_allowed', \sprintf(
-                '%s %s: the SDK is read-only and FakeEdoreczenia never opens, sends or deletes messages.',
+                '%s %s: not supported; the SDK does not send or delete messages.',
                 $request->getMethod(),
                 $path,
             ));
@@ -353,6 +365,144 @@ final class FakeEdoreczenia implements ClientInterface
         };
     }
 
+    // --- Receiving: opening messages and attachments ---
+
+    /**
+     * Handles GET messages/{id}, GET messages/{id}/attachments/{attachmentId} and POST attachments/download;
+     * returns null for every other request.
+     *
+     * @param list<string> $segments decoded path segments
+     */
+    private function receiving(RequestInterface $request, array $segments): ?ResponseInterface
+    {
+        $n = \count($segments);
+        $at = static fn(int $fromEnd): ?string => $segments[$n - $fromEnd] ?? null;
+        $method = $request->getMethod();
+
+        [$name, $pathMailbox] = match (true) {
+            $method === 'POST' && $n >= 3 && $at(2) === 'attachments' && $at(1) === 'download' => ['downloadAttachment', $at(3)],
+            $method === 'GET' && $n >= 5 && $at(4) === 'messages' && $at(2) === 'attachments' => ['attachment', $at(5)],
+            $method === 'GET' && $n >= 3 && $at(2) === 'messages' && $at(1) !== 'evidences' => ['open', $at(3)],
+            default => [null, null],
+        };
+        if ($name === null) {
+            return null;
+        }
+
+        $mailbox = $this->mailboxOf($request);
+        if ($mailbox === null) {
+            return $this->uaError(401, 'unauthorized', 'Missing or unknown bearer token');
+        }
+        if ($pathMailbox !== $mailbox) {
+            return $this->uaError(403, 'forbidden', 'The access token was not issued for this mailbox');
+        }
+
+        if ($name === 'open') {
+            parse_str($request->getUri()->getQuery(), $query);
+
+            return $this->openMessage((string) $at(1), $query['format'] ?? 'full');
+        }
+        if ($name === 'attachment') {
+            $file = self::attachmentWithContent((string) $at(3), (string) $at(1));
+
+            return $file === null ? $this->uaError(400, 'INVALID_PARAMETER', 'Unknown message or attachment id') : $this->json(200, $file);
+        }
+
+        $body = json_decode((string) $request->getBody(), true);
+        $messageId = \is_array($body) ? ($body['messageId'] ?? null) : null;
+        $attachmentId = \is_array($body) ? ($body['attachmentId'] ?? null) : null;
+        if (!\is_string($messageId) || !\is_string($attachmentId)) {
+            return $this->uaError(400, 'INVALID_PARAMETER', 'messageId and attachmentId are required');
+        }
+        $attachment = self::attachmentMetadata($messageId, $attachmentId);
+        if ($attachment === null) {
+            return $this->uaError(400, 'INVALID_PARAMETER', 'Unknown message or attachment id');
+        }
+
+        return $this->binary('application/octet-stream', (string) ($attachment['file']['fileMetadata']['filename'] ?? $attachmentId), SyntheticData::ATTACHMENT_FILES[$attachmentId] ?? '');
+    }
+
+    private function openMessage(string $id, mixed $format): ResponseInterface
+    {
+        $message = $id === SyntheticData::PENDING_MESSAGE_ID ? SyntheticData::PENDING_MESSAGE : self::message($id);
+        if ($message === null) {
+            return $this->uaError(400, 'INVALID_PARAMETER', 'Unknown message id');
+        }
+        if (!\in_array($format, ['fullExtended', 'full', 'metadata', 'minimal'], true)) {
+            return $this->uaError(400, 'INVALID_PARAMETER', 'Unknown format');
+        }
+        if ($format === 'minimal') {
+            $metadata = \is_array($message['messageMetadata'] ?? null) ? $message['messageMetadata'] : [];
+
+            return $this->json(200, [['messageMetadata' => array_intersect_key($metadata, ['messageId' => true, 'shippingService' => true])]]);
+        }
+        if ($format === 'metadata') {
+            return $this->json(200, [$this->withOpenedFlag($message)]);
+        }
+
+        if ($id === SyntheticData::PENDING_MESSAGE_ID && !isset($this->pendingAnswered[$id])) {
+            $this->pendingAnswered[$id] = true;
+
+            return $this->json(202, ['status' => 'PENDING']);
+        }
+
+        // Opening has legal effect in the real service; here it only flips the "opened" flag.
+        $this->openedMessages[$id] = true;
+        $content = SyntheticData::MESSAGE_CONTENTS[$id] ?? ['textBody' => null, 'attachments' => []];
+        $attachments = $format === 'fullExtended'
+            ? array_map(static fn(array $a): array => self::attachmentWithContent($id, $a['attachmentId']) ?? $a, $content['attachments'])
+            : $content['attachments'];
+
+        return $this->json(200, [$this->withOpenedFlag($message) + array_filter(['textBody' => $content['textBody'], 'attachments' => $attachments], static fn(mixed $v): bool => $v !== null && $v !== [])]);
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     *
+     * @return array<string, mixed>
+     */
+    private function withOpenedFlag(array $message): array
+    {
+        $id = \is_array($message['messageMetadata'] ?? null) ? ($message['messageMetadata']['messageId'] ?? null) : null;
+        if (\is_string($id) && isset($this->openedMessages[$id]) && \is_array($message['messageControlData'] ?? null)) {
+            $message['messageControlData']['opened'] = true;
+        }
+
+        return $message;
+    }
+
+    /**
+     * @return array{order: int, attachmentId: string, file: array{fileMetadata: array<string, int|string>}}|null
+     */
+    private static function attachmentMetadata(string $messageId, string $attachmentId): ?array
+    {
+        foreach (SyntheticData::MESSAGE_CONTENTS[$messageId]['attachments'] ?? [] as $attachment) {
+            if ($attachment['attachmentId'] === $attachmentId) {
+                return $attachment;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The attachment with its Base64 content in "file.file".
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function attachmentWithContent(string $messageId, string $attachmentId): ?array
+    {
+        $attachment = self::attachmentMetadata($messageId, $attachmentId);
+        if ($attachment === null) {
+            return null;
+        }
+        $attachment['file']['file'] = base64_encode(SyntheticData::ATTACHMENT_FILES[$attachmentId] ?? '');
+
+        return $attachment;
+    }
+
+    // --- End of receiving ---
+
     /**
      * @param list<string> $s decoded path segments
      *
@@ -382,7 +532,7 @@ final class FakeEdoreczenia implements ClientInterface
      */
     private function messages(array $query): ResponseInterface
     {
-        $page = self::page(SyntheticData::MESSAGES, $query['offset'] ?? 0, $query['limit'] ?? null);
+        $page = array_map($this->withOpenedFlag(...), self::page(SyntheticData::MESSAGES, $query['offset'] ?? 0, $query['limit'] ?? null));
         $electronic = array_filter(SyntheticData::MESSAGES, static fn(array $m): bool => $m['messageMetadata']['shippingService'] === 'electronic');
 
         return $this->json(200, [
@@ -404,7 +554,7 @@ final class FakeEdoreczenia implements ClientInterface
         }
 
         $messages = array_values(array_filter(SyntheticData::MESSAGES, static fn(array $m): bool => ($m['messageMetadata']['threadId'] ?? null) === $id));
-        $page = self::page($messages, $query['offset'] ?? 0, $query['limit'] ?? null);
+        $page = array_map($this->withOpenedFlag(...), self::page($messages, $query['offset'] ?? 0, $query['limit'] ?? null));
 
         return $this->json(200, ['threadId' => $id, 'messages' => ['messages' => $page, 'resultSize' => \count($page), 'total' => \count($messages)]]);
     }

@@ -14,7 +14,8 @@ namespace B4x\Edoreczenia\Testing;
  *
  * @internal the shape may change between releases; use the documented ids in your tests:
  *           mailbox {@see self::MAILBOX}, ADEs {@see self::ADDRESSES}, thread "T-1",
- *           messages {@see self::MESSAGE_ID} and {@see self::SENT_MESSAGE_ID}, evidences "EV-1".."EV-3".
+ *           messages {@see self::MESSAGE_ID} and {@see self::SENT_MESSAGE_ID}, evidences "EV-1".."EV-3",
+ *           attachments "ATT-1" and "ATT-2" of {@see self::MESSAGE_ID}, pending message {@see self::PENDING_MESSAGE_ID}.
  */
 final class SyntheticData
 {
@@ -265,6 +266,72 @@ final class SyntheticData
             'reasonId' => 'R-01',
             'reasonDetails' => ['Nieprawidłowy format pliku', 'Invalid file format'],
         ],
+    ];
+
+    // --- Receiving ---
+
+    /** Not listed; opening it answers HTTP 202 (transfer pending) once, then returns {@see self::PENDING_MESSAGE}. */
+    public const PENDING_MESSAGE_ID = '0A1B2C3D-0000-4000-8000-000000000002';
+
+    public const PENDING_MESSAGE = [
+        'messageControlData' => [
+            'opened' => false,
+            'status' => 'Doręczona',
+            'messageType' => 'Message',
+            'labels' => [['label' => 'INBOX']],
+        ],
+        'messageMetadata' => [
+            'from' => [
+                'eDeliveryAddress' => 'AE:PL-98765-43210-SFVYC-19',
+                'contributor' => ['companyName' => 'MINISTERSTWO POCZT I TELEGRAFÓW'],
+            ],
+            'to' => [['eDeliveryAddress' => self::MAILBOX]],
+            'subject' => 'Zawiadomienie',
+            'messageId' => self::PENDING_MESSAGE_ID,
+            'timestamp' => '2017-07-23T09:00:00Z',
+            'shippingService' => 'electronic',
+        ],
+    ];
+
+    /**
+     * Parts returned only when a message is opened, keyed by message id: "textBody" and "attachments"
+     * ("Attachment" without "file.file"; the content is taken from {@see self::ATTACHMENT_FILES}).
+     */
+    public const MESSAGE_CONTENTS = [
+        self::MESSAGE_ID => [
+            'textBody' => 'Syntetyczna treść wiadomości. Synthetic message body.',
+            'attachments' => [
+                [
+                    'order' => 1,
+                    'attachmentId' => 'ATT-1',
+                    'file' => ['fileMetadata' => [
+                        'fileId' => 'F-1',
+                        'filename' => 'wezwanie.pdf',
+                        'contentType' => 'application/pdf',
+                        'size' => 81,
+                        'description' => 'Wezwanie',
+                    ]],
+                ],
+                [
+                    'order' => 2,
+                    'attachmentId' => 'ATT-2',
+                    'file' => ['fileMetadata' => [
+                        'fileId' => 'F-2',
+                        'filename' => 'dane.xml',
+                        'contentType' => 'application/xml',
+                        'size' => 104,
+                    ]],
+                ],
+            ],
+        ],
+        self::SENT_MESSAGE_ID => ['textBody' => 'Synthetic reply body.', 'attachments' => []],
+        self::PENDING_MESSAGE_ID => ['textBody' => 'Synthetic body of a message delivered after a transfer.', 'attachments' => []],
+    ];
+
+    /** Attachment bytes, keyed by attachment id; "size" in {@see self::MESSAGE_CONTENTS} matches their length. */
+    public const ATTACHMENT_FILES = [
+        'ATT-1' => "%PDF-1.4\n% Synthetic attachment served by FakeEdoreczenia, not a document.\n%%EOF\n",
+        'ATT-2' => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Synthetic attachment served by FakeEdoreczenia. -->\n<dane/>\n",
     ];
 
     private function __construct() {}

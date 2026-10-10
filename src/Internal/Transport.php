@@ -87,6 +87,34 @@ final class Transport
     }
 
     /**
+     * Like {@see getJson()}, but also returns the 2xx status code, for operations whose
+     * 200 and 202 bodies have different shapes.
+     *
+     * @param array<string, string|int|bool> $query
+     * @param list<string>                   $maskedSegments
+     *
+     * @return array{int, array<mixed>} status code and decoded JSON body
+     */
+    public function getJsonWithStatus(string $uri, array $query, string $operation, bool $safeToRetry, array $maskedSegments = []): array
+    {
+        $response = $this->exchange('GET', self::withQuery($uri, $query), null, $operation, $safeToRetry, $maskedSegments, 'application/json');
+
+        return [$response->getStatusCode(), Json::decodeResponse($response, $operation)];
+    }
+
+    /**
+     * Binary POST: sends a JSON body and returns the successful response without reading its body,
+     * like {@see getStream()}.
+     *
+     * @param array<mixed> $payload
+     * @param list<string> $maskedSegments
+     */
+    public function postStream(string $uri, array $payload, string $operation, bool $safeToRetry, array $maskedSegments = []): ResponseInterface
+    {
+        return $this->exchange('POST', $uri, Json::encode($payload), $operation, $safeToRetry, $maskedSegments, '*/*');
+    }
+
+    /**
      * @param list<string> $maskedSegments
      *
      * @return array<mixed>
