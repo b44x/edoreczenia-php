@@ -6,7 +6,7 @@ oraz część tylko-do-odczytu **User Agent API v3** (skrzynka).
 
 🇬🇧 English version: [README.md](README.md)
 
-> **Status: 0.1 (wersja przedpremierowa).** Zbudowane i przetestowane wyłącznie na podstawie oficjalnych specyfikacji;
+> **Status: 0.2 (wersja przedpremierowa).** Zbudowane i przetestowane wyłącznie na podstawie oficjalnych specyfikacji;
 > **jeszcze niezweryfikowane na żywym środowisku INT ani PROD**. Projekt nie jest powiązany z Ministerstwem Cyfryzacji,
 > COI ani Pocztą Polską, nie jest przez nie zatwierdzony ani certyfikowany. Nie jest gotowy do produkcji.
 
@@ -16,7 +16,7 @@ oraz część tylko-do-odczytu **User Agent API v3** (skrzynka).
 |---|---|
 | Uwierzytelnienie | OIDC `client_credentials` z asercją JWT podpisaną kluczem systemu (RS256), ponowne użycie tokenu zgodnie z instrukcją integracji, opcjonalne współdzielenie przez cache PSR-16 |
 | Search Engine API v4 (kontrakt 4.0.5) | wyszukiwanie po danych podmiotu lub ADE (`bae_search`), masowa weryfikacja do 1000 ADE (`eda-search`), dane własnego adresu (`eda-confirmation`) |
-| User Agent API v3 (kontrakt 3.0.8) | tylko odczyt: słownik krajów, foldery i liczniki, ustawienia, lista wiadomości (`minimal`/`metadata`). Odbiór, wysyłka i usuwanie – w planie |
+| User Agent API v3 (kontrakt 3.0.8) | tylko odczyt: słownik krajów, foldery i liczniki, ustawienia, lista wiadomości (`minimal`/`metadata`), wątki, dowody (listy i strumieniowe pobieranie XML/PDF). Odbiór, wysyłka i usuwanie – w planie |
 | Środowiska | produkcyjne i integracyjne (INT), wybierane jawnie – nie ma wartości domyślnej |
 | HTTP | dowolny klient PSR-18 (Guzzle, Symfony HttpClient…); brak zależności od frameworka |
 
@@ -85,6 +85,13 @@ $lista = $client->userAgent()->listMessages(
 foreach ($lista->messages as $wiadomosc) {
     echo $wiadomosc->messageId, ' ', $wiadomosc->subject, PHP_EOL;
 }
+```
+
+Dowody (nadania, doręczenia, otrzymania) pobierasz jako strumienie – duże pliki nie trafiają w całości do pamięci:
+
+```php
+$plik = $client->userAgent()->downloadEvidence(EvidenceService::Purde, $dowod->evidenceId);
+$plik->saveTo('/archiwum/' . $dowod->evidenceId . '.xml');   // oryginał XML archiwizuj bez zmian
 ```
 
 Pobranie listy nie otwiera wiadomości. Otwarcie wiadomości (pobranie w trybie `full`) oznacza ją jako odczytaną,

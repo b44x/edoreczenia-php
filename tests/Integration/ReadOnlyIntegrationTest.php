@@ -42,6 +42,9 @@ final class ReadOnlyIntegrationTest extends TestCase
 
         self::assertNotSame([], $client->userAgent()->countries());
         self::assertNotSame([], $client->userAgent()->directories(), 'every mailbox has predefined folders');
+        self::assertGreaterThanOrEqual(0, $client->userAgent()->listMessages()->total ?? 0);
+        self::assertGreaterThanOrEqual(0, $client->userAgent()->listThreads()->total ?? 0);
+        self::assertGreaterThanOrEqual(0, \count($client->userAgent()->mailboxEvidences()->evidences));
     }
 
     /**

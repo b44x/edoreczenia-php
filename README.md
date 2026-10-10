@@ -8,7 +8,7 @@ and the read-only part of the **User Agent API v3** (mailbox).
 
 🇵🇱 Polska wersja: [README.pl.md](README.pl.md)
 
-> **Status: 0.1 (pre-release).** Built and tested against the official specifications only; **not yet verified against
+> **Status: 0.2 (pre-release).** Built and tested against the official specifications only; **not yet verified against
 > the live INT or PROD environments**. Not affiliated with, endorsed or certified by the Ministry of Digital Affairs, COI or
 > Poczta Polska. Not production-ready.
 
@@ -18,7 +18,7 @@ and the read-only part of the **User Agent API v3** (mailbox).
 |---|---|
 | Authentication | OIDC `client_credentials` with signed JWT client assertion (RS256), token reuse per the official rules, optional PSR-16 sharing between processes |
 | Search Engine API v4 (contract 4.0.5) | search by holder data or ADE (`bae_search`), bulk lookup of up to 1000 ADE (`eda-search`), own address data (`eda-confirmation`) |
-| User Agent API v3 (contract 3.0.8) | read-only: countries, folders and counts, settings, message list (`minimal`/`metadata`). Reading, sending and deleting messages are planned |
+| User Agent API v3 (contract 3.0.8) | read-only: countries, folders and counts, settings, message list (`minimal`/`metadata`), threads, evidences (lists and streamed XML/PDF downloads). Reading, sending and deleting messages are planned |
 | Environments | production and integration (INT), selected explicitly — there is no default |
 | HTTP | any PSR-18 client (Guzzle, Symfony HttpClient, …); no framework dependency |
 
@@ -116,6 +116,23 @@ $list = $ua->listMessages(
 
 foreach ($list->messages as $message) {
     echo $message->messageId, ' ', $message->subject, ' ', $message->from?->displayName(), PHP_EOL;
+}
+```
+
+Threads work the same way: `$ua->listThreads(ThreadQuery::create()->withCaseId('…'))` and
+`$ua->getThread($threadId)` return messages as a list, without opening them.
+
+Evidences (proof of submission, delivery, receipt) are listed and downloaded as streams, so large files never
+sit in memory:
+
+```php
+use B4x\Edoreczenia\UserAgent\V3\Enum\EvidenceService;
+use B4x\Edoreczenia\UserAgent\V3\Enum\EvidenceType;
+use B4x\Edoreczenia\UserAgent\V3\Request\EvidenceQuery;
+
+foreach ($ua->messageEvidences($messageId, EvidenceQuery::create()->ofType(EvidenceType::ReceiptConfirmationXml))->evidences as $evidence) {
+    $file = $ua->downloadEvidence(EvidenceService::Purde, $evidence->evidenceId);
+    $file->saveTo('/archive/' . $evidence->evidenceId . '.xml');   // keep the original XML unchanged
 }
 ```
 

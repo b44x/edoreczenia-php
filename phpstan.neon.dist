@@ -9,5 +9,6 @@ parameters:
         - src
         - tests
         - tools
+        - examples
     tmpDir: build/phpstan
     treatPhpDocTypesAsCertain: false

@@ -3,6 +3,27 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project uses [Semantic Versioning](https://semver.org/) (during 0.x, a minor release may contain breaking changes).
 
+## [Unreleased]
+
+## [0.2.0] - 2026-10-10
+
+Read-only User Agent API v3 completed. **Still not verified against the INT or PROD environments.**
+
+### Added
+
+- UA API v3 threads (read-only, not yet verified against INT/PROD): `userAgent()->listThreads(ThreadQuery)` and
+  `userAgent()->getThread($threadId, ThreadMessageQuery)`; listing a thread does not open its messages (UC045).
+- UA API v3 evidences (read-only, not yet verified against INT/PROD): `messageEvidences()`, `mailboxEvidences()`,
+  `evidence()`, and streamed downloads `downloadEvidence()`, `downloadHybridAcknowledgement()`,
+  `downloadTechnicalEvidences()` returning a `Download` (PSR-7 stream, sanitised file name, `saveTo()`).
+- `EvidenceType` with normalisation of both contract spellings (`E.1`/`E1`); `EvidenceService`; `EvidenceQuery`.
+- `examples/user-agent.php`: read-only mailbox tour (folders, unread messages, evidences).
+- CI runs on `dev/**` branches, tags and on manual dispatch.
+
+### Changed
+
+- Package description mentions the read-only User Agent API v3.
+
 ## [0.1.0] - 2026-10-09
 
 First public pre-release. **Not yet verified against the INT or PROD environments.**
@@ -22,3 +43,7 @@ First public pre-release. **Not yet verified against the INT or PROD environment
   `getOwnAddressDetails()` (`eda-confirmation`), request builders, response models, enums and error-code catalogue.
 - `composer specs:fetch`: hash-verified download of the official contracts; contract test suite.
 - README in English and Polish, contribution guide and security policy.
+
+[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/b44x/edoreczenia-php/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/b44x/edoreczenia-php/releases/tag/v0.1.0

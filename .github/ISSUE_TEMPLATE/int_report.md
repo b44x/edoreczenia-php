@@ -23,6 +23,8 @@ Date and time of the test (UTC):
 | `userAgent()->directories()` / `directoriesWithCounts()` | | |
 | `userAgent()->settings()` | | |
 | `userAgent()->listMessages()` (minimal / metadata) | | |
+| `userAgent()->listThreads()` / `getThread()` | | |
+| `userAgent()->mailboxEvidences()` / `downloadEvidence()` | | |
 
 ### Open questions you can answer
 
@@ -32,5 +34,7 @@ Date and time of the test (UTC):
 - [ ] does the message list contain `total`, `resultSize` or both?
 - [ ] are mailbox addresses accepted unencoded in the path (`/api/v3/AE:PL-…/messages`)?
 - [ ] does the `minimal` list format include `messageMetadata.messageId`?
+- [ ] is the thread array called `Thread`, and are event dates spelled `firstMessagEventDate`?
+- [ ] which evidence type spelling does the server return (`E.1` or `E1`)? Does downloading set `downloaded`?
 
 ### Anything else that differed from the documentation

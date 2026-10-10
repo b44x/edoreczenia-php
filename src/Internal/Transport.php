@@ -71,12 +71,19 @@ final class Transport
      */
     public function getJson(string $uri, array $query, string $operation, bool $safeToRetry, array $maskedSegments = []): array
     {
-        if ($query !== []) {
-            $pairs = array_map(static fn(string|int|bool $value): string => \is_bool($value) ? ($value ? 'true' : 'false') : (string) $value, $query);
-            $uri .= (str_contains($uri, '?') ? '&' : '?') . http_build_query($pairs, '', '&', \PHP_QUERY_RFC3986);
-        }
+        return $this->send('GET', self::withQuery($uri, $query), null, $operation, $safeToRetry, $maskedSegments);
+    }
 
-        return $this->send('GET', $uri, null, $operation, $safeToRetry, $maskedSegments);
+    /**
+     * Binary GET: returns the successful response without reading its body, so large files can be
+     * streamed by the caller. Error responses are mapped exactly like JSON calls.
+     *
+     * @param array<string, string|int|bool> $query
+     * @param list<string>                   $maskedSegments
+     */
+    public function getStream(string $uri, array $query, string $operation, bool $safeToRetry, array $maskedSegments = []): ResponseInterface
+    {
+        return $this->exchange('GET', self::withQuery($uri, $query), null, $operation, $safeToRetry, $maskedSegments, '*/*');
     }
 
     /**
@@ -86,6 +93,32 @@ final class Transport
      */
     private function send(string $method, string $uri, ?string $body, string $operation, bool $safeToRetry, array $maskedSegments): array
     {
+        $response = $this->exchange($method, $uri, $body, $operation, $safeToRetry, $maskedSegments, 'application/json');
+
+        return Json::decodeResponse($response, $operation);
+    }
+
+    /**
+     * @param array<string, string|int|bool> $query
+     */
+    private static function withQuery(string $uri, array $query): string
+    {
+        if ($query === []) {
+            return $uri;
+        }
+
+        $pairs = array_map(static fn(string|int|bool $value): string => \is_bool($value) ? ($value ? 'true' : 'false') : (string) $value, $query);
+
+        return $uri . (str_contains($uri, '?') ? '&' : '?') . http_build_query($pairs, '', '&', \PHP_QUERY_RFC3986);
+    }
+
+    /**
+     * Sends the request with authentication, retries and logging; returns a 2xx response or throws.
+     *
+     * @param list<string> $maskedSegments
+     */
+    private function exchange(string $method, string $uri, ?string $body, string $operation, bool $safeToRetry, array $maskedSegments, string $accept): ResponseInterface
+    {
         $maxRetries = $safeToRetry ? $this->retryPolicy->maxRetries : 0;
         $logUri = self::redactUri($uri, $maskedSegments);
 
@@ -93,7 +126,7 @@ final class Transport
             $token = $this->tokenProvider->getToken();
             $request = $this->requestFactory->createRequest($method, $uri)
                 ->withHeader('Authorization', 'Bearer ' . $token->value())
-                ->withHeader('Accept', 'application/json')
+                ->withHeader('Accept', $accept)
                 ->withHeader('User-Agent', self::USER_AGENT);
             if ($body !== null) {
                 $request = $request
@@ -118,7 +151,7 @@ final class Transport
             if ($status >= 200 && $status < 300) {
                 $this->log('debug', $operation, $method, $logUri, $attempt, $started, $status);
 
-                return Json::decodeResponse($response, $operation);
+                return $response;
             }
 
             $exception = ErrorResponse::toException($response, $operation);

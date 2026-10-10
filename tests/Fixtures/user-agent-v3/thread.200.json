@@ -1,0 +1,13 @@
+{
+  "threadId": "T-1",
+  "messages": {
+    "messages": [
+      {
+        "messageControlData": { "opened": true, "status": "Doręczona", "messageType": "Message" },
+        "messageMetadata": { "messageId": "D41568F4-7175-42BB-9503-DAA282180D70", "threadId": "T-1", "subject": "Wezwanie", "shippingService": "electronic" }
+      }
+    ],
+    "resultSize": 1,
+    "total": 1
+  }
+}

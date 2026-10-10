@@ -1,0 +1,18 @@
+{
+  "total": 1,
+  "Thread": [
+    {
+      "opened": false,
+      "threadId": "T-1",
+      "caseIDs": ["ZNAK-SPRAWY.1.2026"],
+      "senders": [ { "companyName": "MINISTERSTWO POCZT I TELEGRAFÓW" } ],
+      "recipients": [ { "firstName": "ADAM", "lastName": "MALINOWSKI" } ],
+      "firstMessageTitle": "Wezwanie",
+      "firstMessageSubmissionDate": "2017-07-21T17:32:28Z",
+      "firstMessagEventDate": "2017-07-21T17:32:28Z",
+      "lastMessageSubmissionDate": "2017-07-22T08:00:00Z",
+      "lastMessagEventDate": "2017-07-22T08:00:00Z",
+      "messagesCount": 2
+    }
+  ]
+}

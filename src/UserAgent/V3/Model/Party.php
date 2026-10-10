@@ -39,6 +39,22 @@ final readonly class Party
     }
 
     /**
+     * Party known only by name ("Contributor", used in thread summaries).
+     *
+     * @internal
+     */
+    public static function fromContributor(Payload $payload): self
+    {
+        return new self(
+            null,
+            $payload->optionalString('firstName'),
+            $payload->optionalString('lastName'),
+            $payload->optionalString('companyName'),
+            $payload->optionalString('companyNameContinued'),
+        );
+    }
+
+    /**
      * Company name (with continuation) for organisations, otherwise "first last", otherwise the address.
      */
     public function displayName(): string
