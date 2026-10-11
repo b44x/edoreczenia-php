@@ -12,7 +12,7 @@ and the **User Agent API v3** (mailbox: reading, receiving and sending — the l
 
 🇵🇱 Polska wersja: [README.pl.md](README.pl.md)
 
-> **Status: 0.4 (pre-release).** Built and tested against the official specifications only; **not yet verified against
+> **Status: 0.5 (pre-release).** Built and tested against the official specifications only; **not yet verified against
 > the live INT or PROD environments**. Not affiliated with, endorsed or certified by the Ministry of Digital Affairs, COI or
 > Poczta Polska. Not production-ready.
 
@@ -22,7 +22,7 @@ and the **User Agent API v3** (mailbox: reading, receiving and sending — the l
 |---|---|
 | Authentication | OIDC `client_credentials` with signed JWT client assertion (RS256), token reuse per the official rules, optional PSR-16 sharing between processes |
 | Search Engine API v4 (contract 4.0.5) | search by holder data or ADE (`bae_search`), bulk lookup of up to 1000 ADE (`eda-search`), own address data (`eda-confirmation`) |
-| User Agent API v3 (contract 3.0.8) | countries, folders and counts, settings, message list, threads, evidences (lists and streamed XML/PDF downloads); **experimental:** opening messages, streamed attachment downloads, sending, send tasks and drafts. Hybrid (paper) shipments and deleting messages are planned |
+| User Agent API v3 (contract 3.0.8) | countries, folders and counts, settings, message list, threads, evidences (lists and streamed XML/PDF downloads); **experimental:** opening messages, streamed attachment downloads, sending (electronic and hybrid/paper), send tasks, drafts, archives and deleting messages |
 | Environments | production and integration (INT), selected explicitly — there is no default |
 | HTTP | any PSR-18 client (Guzzle, Symfony HttpClient, …), detected automatically when not passed; no framework dependency |
 | Tooling | `vendor/bin/edoreczenia keygen` (key + CSR) and `doctor` (end-to-end configuration check); `FakeEdoreczenia` in-memory fake for your tests |
@@ -214,7 +214,55 @@ for ($i = 0; $task->messageTaskId !== null && $i < 30; ++$i) {
 - Inline attachments are limited to 15 MB. Larger files go into a draft with `uploadDraftAttachment()` (streamed).
 - Drafts: `createDraft()`, `getDraft()`, `listDrafts()`, `updateDraft()`, `deleteDrafts()`, `addDraftAttachment()`,
   `uploadDraftAttachment()`, `deleteDraftAttachment()`, `deleteDraftAttachments()`, `sendDraft()`.
-- Not supported yet: hybrid (paper) shipments, deleting received messages, archives.
+
+Runnable versions: [`examples/receive.php`](examples/receive.php) and [`examples/send.php`](examples/send.php) work
+against `FakeEdoreczenia` out of the box; with `EDORECZENIA_ENV=int` they call INT and ask before anything with legal effect.
+
+### Hybrid (paper) shipments (experimental)
+
+The public hybrid service (PUH) prints the message and delivers it on paper. Recipients are given by postal address:
+
+```php
+use B4x\Edoreczenia\UserAgent\V3\Enum\{CategoryService, OverprintMode, PrintingMode, ProceedingType, ReturnService, ShippingMode};
+use B4x\Edoreczenia\UserAgent\V3\Request\{HybridShipment, PaperAddress, PaperRecipient};
+
+$shipment = HybridShipment::create(
+    ShippingMode::Registered, CategoryService::Economic, ProceedingType::Administrative,
+    ReturnService::ReturnToSender, PrintingMode::Duplex, OverprintMode::Monochrome,
+)->withProofOfDelivery()->withSendersInformation('Urząd Gminy');
+
+$task = $ua->sendMessage(
+    OutgoingMessage::create('Decyzja')
+        ->withPaperRecipients(PaperRecipient::at(
+            PaperAddress::create('PL', '05-569', 'Warszawa', 'Polna')->withBuildingNumber('12A'),
+        )->withPerson('Adam', 'Malinowski'))
+        ->withHybridShipment($shipment)
+        ->withAttachment(OutgoingAttachment::fromString($pdf, 'decyzja.pdf', 'application/pdf')),
+);
+```
+
+The SDK checks the fields the contract requires, its length limits and the `caseContent` rule. Which options may be
+combined is validated by the server.
+
+### Archives and deleting messages (experimental)
+
+```php
+use B4x\Edoreczenia\UserAgent\V3\Request\ArchiveTaskRequest;
+
+$taskId = $ua->createArchiveTask(ArchiveTaskRequest::forMessages($id1, $id2)->withDescription('April 2026'));
+for ($i = 0; $i < 60 && !($ua->archiveTask($taskId)?->isReadyToDownload() ?? false); ++$i) {
+    sleep(30);
+}
+$ua->downloadArchive($taskId)->saveTo('/archive/april.zip');     // streamed ZIP
+$ua->finishArchiveTask($taskId);                                 // keeps the messages
+// $ua->finishArchiveTaskAndDeleteMessages($taskId);             // DESTRUCTIVE
+
+$ua->downloadMessageArchive($id1)->saveTo('/archive/one.zip');   // a single message
+$ua->deleteMessages($id1, $id2);                                 // DESTRUCTIVE, up to 50 ids, never retried
+```
+
+The contract does not say whether deleting is permanent or moves messages to a trash folder, nor whether deleting or
+archiving an unopened message opens it. Archive what you must keep before deleting.
 
 ## Error handling
 
@@ -267,8 +315,8 @@ EDORECZENIA_INT_ADDRESS=AE:PL-… EDORECZENIA_INT_SYSTEM=EZD1 EDORECZENIA_INT_KE
   300 s — use a private store.
 - **Logging:** pass a PSR-3 logger. The SDK logs operation, endpoint path, status, timings, error codes and event ids — never
   headers, query strings, bodies, tokens or keys.
-- **Retries** are off by default and, when enabled, apply only to read-only operations — never to opening, sending or
-  changing drafts.
+- **Retries** are off by default and, when enabled, apply only to read-only operations — never to opening, sending,
+  deleting, changing drafts or archive tasks.
 
 ## Testing your integration
 

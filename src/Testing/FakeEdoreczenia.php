@@ -36,8 +36,9 @@ use Psr\Http\Message\StreamFactoryInterface;
  * are served as JSON and through POST attachments/download.
  *
  * Sending, send tasks and drafts are emulated in memory (see {@see FakeSendingRoutes}); messages
- * accepted for sending are recorded and returned by {@see sentMessages()}. Any other non-GET request
- * to the User Agent API fails with HTTP 405, because the SDK does not issue it.
+ * accepted for sending are recorded and returned by {@see sentMessages()}. Deleting messages and archive
+ * tasks are emulated too (see {@see FakeArchiveRoutes}). Any other non-GET request to the User Agent API
+ * fails with HTTP 405, because the SDK does not issue it.
  *
  * Token lifetimes are not enforced; only opened flags, sending and drafts keep state, per instance:
  * it is a test double, not a simulator.

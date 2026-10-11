@@ -12,7 +12,7 @@ oraz **User Agent API v3** (skrzynka: odczyt, odbiór i wysyłka – dwa ostatni
 
 🇬🇧 English version: [README.md](README.md)
 
-> **Status: 0.4 (wersja przedpremierowa).** Zbudowane i przetestowane wyłącznie na podstawie oficjalnych specyfikacji;
+> **Status: 0.5 (wersja przedpremierowa).** Zbudowane i przetestowane wyłącznie na podstawie oficjalnych specyfikacji;
 > **jeszcze niezweryfikowane na żywym środowisku INT ani PROD**. Projekt nie jest powiązany z Ministerstwem Cyfryzacji,
 > COI ani Pocztą Polską, nie jest przez nie zatwierdzony ani certyfikowany. Nie jest gotowy do produkcji.
 
@@ -22,7 +22,7 @@ oraz **User Agent API v3** (skrzynka: odczyt, odbiór i wysyłka – dwa ostatni
 |---|---|
 | Uwierzytelnienie | OIDC `client_credentials` z asercją JWT podpisaną kluczem systemu (RS256), ponowne użycie tokenu zgodnie z instrukcją integracji, opcjonalne współdzielenie przez cache PSR-16 |
 | Search Engine API v4 (kontrakt 4.0.5) | wyszukiwanie po danych podmiotu lub ADE (`bae_search`), masowa weryfikacja do 1000 ADE (`eda-search`), dane własnego adresu (`eda-confirmation`) |
-| User Agent API v3 (kontrakt 3.0.8) | słownik krajów, foldery i liczniki, ustawienia, lista wiadomości, wątki, dowody (listy i strumieniowe pobieranie XML/PDF); **eksperymentalnie:** otwieranie wiadomości, strumieniowe pobieranie załączników, wysyłka, zadania wysyłki i wersje robocze. Przesyłki hybrydowe i usuwanie wiadomości – w planie |
+| User Agent API v3 (kontrakt 3.0.8) | słownik krajów, foldery i liczniki, ustawienia, lista wiadomości, wątki, dowody (listy i strumieniowe pobieranie XML/PDF); **eksperymentalnie:** otwieranie wiadomości, strumieniowe pobieranie załączników, wysyłka (elektroniczna i hybrydowa/papierowa), zadania wysyłki, wersje robocze, archiwa i usuwanie wiadomości |
 | Środowiska | produkcyjne i integracyjne (INT), wybierane jawnie – nie ma wartości domyślnej |
 | HTTP | dowolny klient PSR-18 (Guzzle, Symfony HttpClient…), wykrywany automatycznie, jeśli go nie podasz; brak zależności od frameworka |
 | Narzędzia | `vendor/bin/edoreczenia keygen` (klucz + CSR) i `doctor` (sprawdzenie konfiguracji od początku do końca); `FakeEdoreczenia` – atrapa usługi do testów |
@@ -162,7 +162,50 @@ $zadanie = $client->userAgent()->sendMessage(
 - Załączniki w treści żądania: do 15 MB. Większe pliki dodaj do wersji roboczej przez `uploadDraftAttachment()` (strumieniowo).
 - Wersje robocze: `createDraft()`, `getDraft()`, `listDrafts()`, `updateDraft()`, `deleteDrafts()`, `addDraftAttachment()`,
   `uploadDraftAttachment()`, `deleteDraftAttachment()`, `deleteDraftAttachments()`, `sendDraft()`.
-- Jeszcze nieobsługiwane: przesyłki hybrydowe (papierowe), usuwanie odebranych wiadomości, archiwa.
+
+Gotowe do uruchomienia: [`examples/receive.php`](examples/receive.php) i [`examples/send.php`](examples/send.php) działają
+od razu na `FakeEdoreczenia`; ze zmienną `EDORECZENIA_ENV=int` łączą się z INT i pytają o zgodę przed każdą operacją ze skutkiem prawnym.
+
+### Przesyłki hybrydowe (papierowe, eksperymentalnie)
+
+Publiczna usługa hybrydowa (PUH) drukuje wiadomość i doręcza ją w postaci papierowej. Adresata wskazujesz adresem pocztowym:
+
+```php
+$przesylka = HybridShipment::create(
+    ShippingMode::Registered, CategoryService::Economic, ProceedingType::Administrative,
+    ReturnService::ReturnToSender, PrintingMode::Duplex, OverprintMode::Monochrome,
+)->withProofOfDelivery()->withSendersInformation('Urząd Gminy');
+
+$zadanie = $client->userAgent()->sendMessage(
+    OutgoingMessage::create('Decyzja')
+        ->withPaperRecipients(PaperRecipient::at(
+            PaperAddress::create('PL', '05-569', 'Warszawa', 'Polna')->withBuildingNumber('12A'),
+        )->withPerson('Adam', 'Malinowski'))
+        ->withHybridShipment($przesylka)
+        ->withAttachment(OutgoingAttachment::fromString($pdf, 'decyzja.pdf', 'application/pdf')),
+);
+```
+
+SDK sprawdza pola wymagane przez kontrakt, limity długości i regułę dla `caseContent`; dozwolone kombinacje opcji weryfikuje serwer.
+
+### Archiwa i usuwanie wiadomości (eksperymentalnie)
+
+```php
+$ua = $client->userAgent();
+$taskId = $ua->createArchiveTask(ArchiveTaskRequest::forMessages($id1, $id2)->withDescription('Kwiecień 2026'));
+for ($i = 0; $i < 60 && !($ua->archiveTask($taskId)?->isReadyToDownload() ?? false); ++$i) {
+    sleep(30);
+}
+$ua->downloadArchive($taskId)->saveTo('/archiwum/kwiecien.zip');  // ZIP strumieniowo
+$ua->finishArchiveTask($taskId);                                  // wiadomości zostają
+// $ua->finishArchiveTaskAndDeleteMessages($taskId);              // NIEODWRACALNE
+
+$ua->downloadMessageArchive($id1)->saveTo('/archiwum/jedna.zip'); // pojedyncza wiadomość
+$ua->deleteMessages($id1, $id2);                                  // NIEODWRACALNE, do 50 id, bez ponawiania
+```
+
+Kontrakt nie określa, czy usunięcie jest trwałe, czy przenosi wiadomość do kosza, ani czy usunięcie lub archiwizacja
+nieotwartej wiadomości ją otwiera. Przed usunięciem zarchiwizuj to, co musisz zachować.
 
 ## Status weryfikacji – szukamy pomocy
 
@@ -184,7 +227,7 @@ i zgłoś wynik przez szablon [INT verification report](https://github.com/b44x/
 - **Logi** (PSR-3) nie zawierają nagłówków, query stringów, treści żądań i odpowiedzi, tokenów ani kluczy –
   tylko operację, ścieżkę, status, czasy, kody błędów i identyfikator zdarzenia (przydatny do zgłoszeń w ITSM Atmosfera).
 - **Ponawianie** jest domyślnie wyłączone; po włączeniu (`RetryPolicy::exponential()`) obejmuje tylko operacje
-  tylko-do-odczytu. Otwieranie i wysyłka wiadomości oraz zmiany wersji roboczych (skutki prawne) nigdy nie są ponawiane automatycznie.
+  tylko-do-odczytu. Otwieranie, wysyłka i usuwanie wiadomości, zmiany wersji roboczych i zadań archiwizacji nigdy nie są ponawiane automatycznie.
 - Nieznane SDK wartości enumów są zwracane jako `string`, więc nowe wartości po stronie serwera nie psują aplikacji.
 
 ## Testowanie integracji

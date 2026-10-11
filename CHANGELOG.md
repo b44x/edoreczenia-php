@@ -5,6 +5,25 @@ and the project uses [Semantic Versioning](https://semver.org/) (during 0.x, a m
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-11
+
+Hybrid (paper) shipments, archives and deleting messages. **Experimental: not yet verified against the INT or PROD
+environments.** Operations with side effects are never retried automatically.
+
+### Added
+
+- Hybrid (paper) shipments through the public hybrid service (PUH): `HybridShipment` with the contract's options
+  (`ShippingMode`, `CategoryService`, `ProceedingType`, `ReturnService`, `PrintingMode`, `OverprintMode`,
+  `FormatService`), recipients by postal address (`PaperRecipient`, `PaperAddress`) and
+  `OutgoingMessage::withHybridShipment()` / `withPaperRecipients()`.
+- Archives: `createArchiveTask(ArchiveTaskRequest)`, `listArchiveTasks(ArchiveTaskQuery)`, `archiveTask()`,
+  streamed `downloadArchive()` and `downloadMessageArchive()`, and `cancelArchiveTask()`, `finishArchiveTask()`,
+  `finishArchiveTaskAndDeleteMessages()`.
+- `deleteMessages()` deletes up to 50 messages; never retried.
+- `examples/receive.php` and `examples/send.php`: run against `FakeEdoreczenia` by default, or against INT with
+  `EDORECZENIA_ENV=int`, asking for confirmation before any operation with legal effect.
+- `FakeEdoreczenia` emulates hybrid shipments, archive tasks (with real ZIP files) and deleting messages.
+
 ## [0.4.0] - 2026-10-11
 
 Receiving and sending messages. **Experimental: these operations have legal effect and are not yet verified against
@@ -99,7 +118,8 @@ First public pre-release. **Not yet verified against the INT or PROD environment
 - `composer specs:fetch`: hash-verified download of the official contracts; contract test suite.
 - README in English and Polish, contribution guide and security policy.
 
-[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/b44x/edoreczenia-php/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/b44x/edoreczenia-php/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/b44x/edoreczenia-php/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/b44x/edoreczenia-php/releases/tag/v0.2.1
