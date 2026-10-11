@@ -44,6 +44,7 @@ use Psr\Http\Message\StreamFactoryInterface;
  */
 final class FakeEdoreczenia implements ClientInterface
 {
+    use FakeArchiveRoutes;
     use FakeSendingRoutes;
 
     public const DEFAULT_MAILBOX = SyntheticData::MAILBOX;
@@ -160,7 +161,7 @@ final class FakeEdoreczenia implements ClientInterface
             }
         }
 
-        return $this->sendingRoute($request, $segments, $path) ?? $this->userAgent($request, $segments, $path);
+        return $this->archiveRoute($request, $segments, $path) ?? $this->sendingRoute($request, $segments, $path) ?? $this->userAgent($request, $segments, $path);
     }
 
     private function token(RequestInterface $request): ResponseInterface

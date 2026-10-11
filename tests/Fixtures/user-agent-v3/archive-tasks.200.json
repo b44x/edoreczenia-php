@@ -1,0 +1,31 @@
+{
+  "total": 3,
+  "tasks": [
+    {
+      "taskId": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+      "creationDate": "2026-05-04T08:15:00Z",
+      "dateForDownload": "2026-05-11T08:15:00Z",
+      "taskStatus": "READY_TO_DOWNLOAD",
+      "numberMessages": 2,
+      "withDeletingMessages": false,
+      "downloadAndChangeStatus": true,
+      "taskDescription": "Archiwum za kwiecień"
+    },
+    {
+      "taskId": "3F2504E0-4F89-41D3-9A0C-0305E82C3302",
+      "creationDate": "2026-05-04T09:00:00Z",
+      "taskStatus": "ARCHIVING_IN_PROGRESS",
+      "numberMessages": 40,
+      "estimatedTimeToComplete": "00:15",
+      "downloadAndChangeStatus": false
+    },
+    {
+      "taskId": "3F2504E0-4F89-41D3-9A0C-0305E82C3303",
+      "creationDate": "2026-05-01T10:00:00Z",
+      "taskStatus": "ERROR",
+      "numberMessages": 1,
+      "errorDescription": "Nie udało się przygotować archiwum",
+      "downloadAndChangeStatus": true
+    }
+  ]
+}

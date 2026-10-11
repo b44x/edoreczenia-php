@@ -103,6 +103,11 @@ final class Payload
         throw $this->mistyped($key, 'boolean', $value);
     }
 
+    public function int(string $key): int
+    {
+        return $this->optionalInt($key) ?? throw $this->missing($key);
+    }
+
     public function optionalInt(string $key): ?int
     {
         $value = $this->data[$key] ?? null;
@@ -114,6 +119,11 @@ final class Payload
             \is_string($value) && preg_match('/^-?\d+$/', $value) === 1 => (int) $value,
             default => throw $this->mistyped($key, 'integer', $value),
         };
+    }
+
+    public function dateTime(string $key): \DateTimeImmutable
+    {
+        return $this->optionalDateTime($key) ?? throw $this->missing($key);
     }
 
     /**

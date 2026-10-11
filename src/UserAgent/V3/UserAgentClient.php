@@ -10,8 +10,12 @@ use B4x\Edoreczenia\Exception\UnexpectedResponseException;
 use B4x\Edoreczenia\Internal\PathSegment;
 use B4x\Edoreczenia\Internal\Payload;
 use B4x\Edoreczenia\Internal\Transport;
+use B4x\Edoreczenia\UserAgent\V3\Enum\ArchiveTaskStatus;
 use B4x\Edoreczenia\UserAgent\V3\Enum\EvidenceService;
 use B4x\Edoreczenia\UserAgent\V3\Enum\MessageTaskState;
+use B4x\Edoreczenia\UserAgent\V3\Model\ArchiveTask;
+use B4x\Edoreczenia\UserAgent\V3\Model\ArchiveTaskList;
+use B4x\Edoreczenia\UserAgent\V3\Model\DeletedMessage;
 use B4x\Edoreczenia\UserAgent\V3\Model\Directory;
 use B4x\Edoreczenia\UserAgent\V3\Model\Download;
 use B4x\Edoreczenia\UserAgent\V3\Model\Draft;
@@ -29,6 +33,8 @@ use B4x\Edoreczenia\UserAgent\V3\Model\SavedDraft;
 use B4x\Edoreczenia\UserAgent\V3\Model\Thread;
 use B4x\Edoreczenia\UserAgent\V3\Model\ThreadList;
 use B4x\Edoreczenia\UserAgent\V3\Model\UploadedAttachment;
+use B4x\Edoreczenia\UserAgent\V3\Request\ArchiveTaskQuery;
+use B4x\Edoreczenia\UserAgent\V3\Request\ArchiveTaskRequest;
 use B4x\Edoreczenia\UserAgent\V3\Request\AttachmentUpload;
 use B4x\Edoreczenia\UserAgent\V3\Request\DraftQuery;
 use B4x\Edoreczenia\UserAgent\V3\Request\EvidenceQuery;
@@ -223,6 +229,196 @@ final class UserAgentClient
     }
 
     // --- End of receiving ---
+
+    // --- Deleting and archives ---
+
+    /** Maximum number of messages per {@see deleteMessages()} call ("maxItems" of the path parameter). */
+    public const MAX_DELETED_MESSAGES = 50;
+
+    /**
+     * DESTRUCTIVE: deletes up to 50 messages of the mailbox (DELETE /{eDeliveryAddress}/messages/{messageId}, ids
+     * joined with ","). Requires the "write_messages" permission.
+     *
+     * What the contract says about the effect is only "Usunięcie wiadomości o podanym id" (deletion of the message
+     * with the given id). It does NOT say whether the message is moved to a trash folder or removed permanently,
+     * whether it can be restored, what happens to its evidences, nor whether deleting a message that has not been
+     * opened yet opens it (marks it as opened, with the legal effect described at {@see openMessage()}). All of
+     * this is unspecified: do not rely on either outcome. To keep a copy, download it first with
+     * {@see downloadMessageArchive()} or an archive task ({@see createArchiveTask()}).
+     *
+     * NEVER retried automatically, whatever the retry policy. After a
+     * {@see \B4x\Edoreczenia\Exception\TransportException} or a 5xx error some or all of the messages may already
+     * be deleted; check with {@see listMessages()} before calling again. How a request mixing deletable and
+     * non-deletable messages is answered is not specified either; the contract's error entries may name the
+     * affected message ({@see \B4x\Edoreczenia\Exception\BadRequestException}).
+     *
+     * Implemented from the official contract only; NOT yet verified against INT or PROD.
+     *
+     * @return list<DeletedMessage> one entry per message, as reported by the server
+     *
+     * @throws EdoreczeniaException
+     */
+    public function deleteMessages(string $messageId, string ...$more): array
+    {
+        $ids = [$messageId, ...$more];
+        if (\count($ids) > self::MAX_DELETED_MESSAGES) {
+            throw new InvalidArgumentException(\sprintf('At most %d messages can be deleted at once.', self::MAX_DELETED_MESSAGES));
+        }
+        $segments = [];
+        foreach ($ids as $id) {
+            if (str_contains(self::id('Message id', $id), ',')) {
+                throw new InvalidArgumentException('Message id must not contain ",".');
+            }
+            $segments[] = PathSegment::encode($id);
+        }
+
+        return array_map(DeletedMessage::fromPayload(...), Payload::rootObjectList($this->delete('messages/' . implode(',', $segments), 'DELETE messages/{messageId}')));
+    }
+
+    /**
+     * Orders a ZIP archive of the given messages (POST /{eDeliveryAddress}/message-archive-task) and returns the id
+     * of the archive task. The archive is prepared asynchronously: poll {@see archiveTask()} until it is
+     * {@see ArchiveTaskStatus::ReadyToDownload}, then call {@see downloadArchive()}, then finish the task with
+     * {@see finishArchiveTask()} or {@see finishArchiveTaskAndDeleteMessages()}.
+     *
+     * Creates server state and has no idempotency key, so it is NEVER retried automatically; after a transport or
+     * 5xx error look for the task with {@see listArchiveTasks()} before ordering it again. The contract declares
+     * only the "read_messages" permission for it. It does not say whether archiving a message that has not been
+     * opened yet opens it; that is unspecified.
+     *
+     * Implemented from the official contract only; NOT yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function createArchiveTask(ArchiveTaskRequest $request): string
+    {
+        return Payload::root($this->post('message-archive-task', $request->toPayload(), 'POST message-archive-task'))->string('taskId');
+    }
+
+    /**
+     * Lists message archive tasks (GET /{eDeliveryAddress}/message-archive-task-list).
+     * Read-only, so it is retried when a retry policy is configured. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function listArchiveTasks(?ArchiveTaskQuery $query = null): ArchiveTaskList
+    {
+        $data = $this->get('message-archive-task-list', ($query ?? ArchiveTaskQuery::create())->toQuery(), 'message-archive-task-list');
+
+        return ArchiveTaskList::fromPayload(Payload::root($data));
+    }
+
+    /**
+     * One archive task, read with the "taskId" filter of {@see listArchiveTasks()}; null when the server does not
+     * list it. Read-only and retried when a retry policy is configured. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function archiveTask(string $taskId): ?ArchiveTask
+    {
+        return $this->listArchiveTasks(ArchiveTaskQuery::create()->forTask($taskId))->find($taskId);
+    }
+
+    /**
+     * Streams the ZIP prepared by an archive task (GET /{eDeliveryAddress}/message-archive-task/{taskId}/download).
+     * Save it with {@see Download::saveTo()}; it is never buffered by the SDK.
+     *
+     * No side effect is documented, so it is retried when a retry policy is configured. The contract does not say
+     * whether downloading opens messages that were not opened yet; that is unspecified.
+     * Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function downloadArchive(string $taskId): Download
+    {
+        $path = 'message-archive-task/' . PathSegment::encode(self::id('Archive task id', $taskId)) . '/download';
+
+        return Download::fromResponse($this->stream($path, [], 'message-archive-task/{taskId}/download'));
+    }
+
+    /**
+     * Cancels an archive task (PATCH /{eDeliveryAddress}/message-archive-task, "changeStatus": "CANCEL").
+     * The contract does not say in which states this is allowed. Never retried automatically.
+     * Not yet verified against INT or PROD.
+     *
+     * @return ArchiveTaskList the server's answer ("MessageArchivingTaskResponse", HTTP 202)
+     *
+     * @throws EdoreczeniaException
+     */
+    public function cancelArchiveTask(string $taskId): ArchiveTaskList
+    {
+        return $this->changeArchiveTask($taskId, 'CANCEL');
+    }
+
+    /**
+     * Finishes an archive task and keeps its messages in the mailbox (PATCH /{eDeliveryAddress}/message-archive-task,
+     * "changeStatus": "FINISH_WITHOUT_DELETING_MESSAGES"). Download the archive first: the contract does not say
+     * whether it stays available afterwards. Never retried automatically. Not yet verified against INT or PROD.
+     *
+     * @return ArchiveTaskList the server's answer ("MessageArchivingTaskResponse", HTTP 202)
+     *
+     * @throws EdoreczeniaException
+     */
+    public function finishArchiveTask(string $taskId): ArchiveTaskList
+    {
+        return $this->changeArchiveTask($taskId, 'FINISH_WITHOUT_DELETING_MESSAGES');
+    }
+
+    /**
+     * DESTRUCTIVE: finishes an archive task and deletes its messages from the mailbox
+     * (PATCH /{eDeliveryAddress}/message-archive-task, "changeStatus": "FINISH_WITH_DELETING_MESSAGES").
+     *
+     * The contract describes it only as finishing the task with deletion of the messages; whether they are removed
+     * permanently or can be restored is unspecified, as for {@see deleteMessages()}. Download and verify the archive
+     * ({@see downloadArchive()}) before calling this. The contract declares only the "read_messages" permission for
+     * this operation.
+     *
+     * NEVER retried automatically; after a transport or 5xx error check the task with {@see archiveTask()} before
+     * calling again. Not yet verified against INT or PROD.
+     *
+     * @return ArchiveTaskList the server's answer ("MessageArchivingTaskResponse", HTTP 202)
+     *
+     * @throws EdoreczeniaException
+     */
+    public function finishArchiveTaskAndDeleteMessages(string $taskId): ArchiveTaskList
+    {
+        return $this->changeArchiveTask($taskId, 'FINISH_WITH_DELETING_MESSAGES');
+    }
+
+    /**
+     * Streams a ZIP with the content of one message, for local archiving
+     * (GET /{eDeliveryAddress}/messages/{messageId}/message-archive-file). Never buffered by the SDK.
+     *
+     * No side effect is documented, so it is retried when a retry policy is configured. The contract does not say
+     * whether this opens a message that was not opened yet; that is unspecified, so prefer it for messages already
+     * opened with {@see openMessage()}. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function downloadMessageArchive(string $messageId): Download
+    {
+        $path = 'messages/' . PathSegment::encode(self::id('Message id', $messageId)) . '/message-archive-file';
+
+        return Download::fromResponse($this->stream($path, [], 'messages/{messageId}/message-archive-file'));
+    }
+
+    /**
+     * Side-effecting PATCH: never retried, whatever the retry policy.
+     */
+    private function changeArchiveTask(string $taskId, string $change): ArchiveTaskList
+    {
+        $data = $this->transport->patchJson(
+            $this->mailboxUri('message-archive-task'),
+            ['taskId' => self::id('Archive task id', $taskId), 'changeStatus' => $change],
+            'UA API v3 PATCH message-archive-task',
+            false,
+            [$this->mailboxAddress],
+        );
+
+        return ArchiveTaskList::fromPayload(Payload::root($data));
+    }
+
+    // --- End of deleting and archives ---
 
     /**
      * Lists conversation threads (GET /{eDeliveryAddress}/threads). Does not open messages.

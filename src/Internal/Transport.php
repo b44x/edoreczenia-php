@@ -128,6 +128,18 @@ final class Transport
     }
 
     /**
+     * @param array<mixed> $payload
+     * @param bool         $safeToRetry true only for operations without side effects
+     * @param list<string> $maskedSegments
+     *
+     * @return array<mixed> decoded JSON body of a 2xx response
+     */
+    public function patchJson(string $uri, array $payload, string $operation, bool $safeToRetry, array $maskedSegments = []): array
+    {
+        return $this->send('PATCH', $uri, Json::encode($payload), $operation, $safeToRetry, $maskedSegments);
+    }
+
+    /**
      * @param bool         $safeToRetry true only for operations without side effects
      * @param list<string> $maskedSegments
      *
