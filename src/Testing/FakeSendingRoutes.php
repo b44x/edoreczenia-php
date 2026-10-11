@@ -12,7 +12,9 @@ use Psr\Http\Message\ResponseInterface;
  *
  *  - POST {mailbox}/messages and POST {mailbox}/drafts/send answer HTTP 202 with a new "messageTaskId".
  *    Recipients listed in {@see SyntheticData::ADDRESSES} with status ACTIVE get a message id; any other
- *    address gets a per-recipient error in the task, as an asynchronous rejection would look like;
+ *    address gets a per-recipient error in the task, as an asynchronous rejection would look like.
+ *    Hybrid (paper) messages need "hybridShipment" with the fields the contract requires; their recipients
+ *    given by postal address get a message id when "address" has country, postalCode, city and street;
  *  - GET {mailbox}/messages/tasks/{id}/status answers PENDING on the first poll of a task and FINISHED afterwards;
  *  - drafts and tasks belong to the mailbox of the access token; drafts can be created, listed, read, replaced and deleted, and attachments added (JSON or multipart
  *    upload), read and removed.
@@ -148,8 +150,13 @@ trait FakeSendingRoutes
         if ($problem === null && $recipients === []) {
             $problem = 'messageMetadata.to must list at least one recipient';
         }
-        if ($problem === null && ($metadata['shippingService'] ?? null) !== 'electronic') {
-            $problem = 'FakeEdoreczenia supports electronic shipments only';
+        $service = \is_array($metadata) ? ($metadata['shippingService'] ?? null) : null;
+        $hybrid = $service === 'hybrid';
+        if ($problem === null && !$hybrid && $service !== 'electronic') {
+            $problem = 'messageMetadata.shippingService must be "electronic" or "hybrid"';
+        }
+        if ($problem === null && $hybrid) {
+            $problem = self::hybridShipmentProblem(\is_array($metadata) ? ($metadata['hybridShipment'] ?? null) : null);
         }
         if ($problem !== null) {
             return $this->uaError(400, 'INVALID_REQUEST', $problem);
@@ -158,6 +165,10 @@ trait FakeSendingRoutes
         $results = [];
         foreach ($recipients as $recipient) {
             $address = \is_array($recipient) ? ($recipient['eDeliveryAddress'] ?? null) : null;
+            if ($hybrid && $address === null && \is_array($recipient)) {
+                $results[] = self::paperRecipientResult($recipient);
+                continue;
+            }
             $entry = \is_string($address) ? (SyntheticData::ADDRESSES[$address] ?? null) : null;
             $results[] = $entry !== null && $entry['eda']['edaStatus'] === 'ACTIVE'
                 ? ['messageId' => self::fakeUuid(), 'addressee' => ['eDeliveryAddress' => $address]]
@@ -169,6 +180,39 @@ trait FakeSendingRoutes
         $this->sentMessages[] = $message;
 
         return $this->json(202, ['messageTaskId' => $taskId]);
+    }
+
+    /**
+     * @param array<mixed> $recipient "MessageAddressData" without an e-Delivery address
+     *
+     * @return array<string, mixed>
+     */
+    private static function paperRecipientResult(array $recipient): array
+    {
+        $address = \is_array($recipient['address'] ?? null) ? $recipient['address'] : [];
+        $complete = true;
+        foreach (['country', 'postalCode', 'city', 'street'] as $field) {
+            $value = $address[$field] ?? null;
+            $complete = $complete && \is_string($value) && trim($value) !== '';
+        }
+
+        return $complete
+            ? ['messageId' => self::fakeUuid(), 'addressee' => $recipient]
+            : ['addressee' => $recipient, 'error' => 'INVALID_RECIPIENT', 'error_description' => 'The postal address is incomplete'];
+    }
+
+    private static function hybridShipmentProblem(mixed $shipment): ?string
+    {
+        if (!\is_array($shipment)) {
+            return 'messageMetadata.hybridShipment is required for hybrid shipments';
+        }
+        foreach (['categoryService', 'printingMode', 'overprintMode', 'returnService', 'procedingType', 'shippingMode'] as $field) {
+            if (!\is_string($shipment[$field] ?? null)) {
+                return \sprintf('messageMetadata.hybridShipment.%s is required', $field);
+            }
+        }
+
+        return null;
     }
 
     private function sendTaskStatus(string $mailbox, string $taskId): ResponseInterface

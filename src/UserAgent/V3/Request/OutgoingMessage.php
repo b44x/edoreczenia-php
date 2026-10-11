@@ -8,13 +8,16 @@ use B4x\Edoreczenia\Exception\InvalidArgumentException;
 use B4x\Edoreczenia\UserAgent\V3\Enum\ShippingService;
 
 /**
- * An electronic (RDE) message to send or to save as a draft ("Message" schema), built immutably.
+ * A message to send or to save as a draft ("Message" schema), built immutably.
  *
  * Every value is checked locally before any request is made: blank or non-UTF-8 text, the 5000-character
  * limit of "textBody", duplicate recipients, attachment names, types and sizes.
  *
- * The SDK fills in "messageMetadata.from" with the mailbox address of the client and
- * "shippingService" = "electronic". Hybrid (paper, PUH) shipments are not supported.
+ * The SDK fills in "messageMetadata.from" with the mailbox address of the client and "shippingService":
+ * "electronic" (RDE, the default) or, after {@see withHybridShipment()}, "hybrid" (PUH: printed and delivered
+ * on paper). A hybrid message may also have recipients without an e-Delivery address, given by postal address
+ * with {@see withPaperRecipients()}; in "messageMetadata.to" they follow the recipients given by e-Delivery address.
+ * Which recipients and options the hybrid service accepts beyond the contract is checked by the server.
  *
  * Reply or forward: copy the "threadId" of the original message with {@see inThread()} and point at it with
  * {@see referringTo()}.
@@ -28,6 +31,11 @@ final class OutgoingMessage
 
     /** @var list<string> */
     private array $recipients = [];
+
+    /** @var list<PaperRecipient> */
+    private array $paperRecipients = [];
+
+    private ?HybridShipment $hybridShipment = null;
 
     private ?string $textBody = null;
 
@@ -64,6 +72,37 @@ final class OutgoingMessage
             }
             $message->recipients[] = $recipient;
         }
+
+        return $message;
+    }
+
+    /**
+     * Adds recipients of a hybrid shipment by postal address, without an e-Delivery address.
+     * Requires {@see withHybridShipment()}, checked when the request body is built. Each recipient may appear only once.
+     */
+    public function withPaperRecipients(PaperRecipient $recipient, PaperRecipient ...$more): self
+    {
+        $message = clone $this;
+        foreach ([$recipient, ...$more] as $paperRecipient) {
+            foreach ($message->paperRecipients as $known) {
+                if ($known->toPayload() === $paperRecipient->toPayload()) {
+                    throw new InvalidArgumentException('Each paper recipient may appear only once in a message.');
+                }
+            }
+            $message->paperRecipients[] = $paperRecipient;
+        }
+
+        return $message;
+    }
+
+    /**
+     * Sends the message through the hybrid service (PUH): "shippingService" = "hybrid" with these print and
+     * delivery options ("hybridShipment"). Setting it again replaces the options.
+     */
+    public function withHybridShipment(HybridShipment $shipment): self
+    {
+        $message = clone $this;
+        $message->hybridShipment = $shipment;
 
         return $message;
     }
@@ -147,6 +186,24 @@ final class OutgoingMessage
         return $this->recipients;
     }
 
+    /**
+     * @return list<PaperRecipient>
+     */
+    public function paperRecipients(): array
+    {
+        return $this->paperRecipients;
+    }
+
+    public function hybridShipment(): ?HybridShipment
+    {
+        return $this->hybridShipment;
+    }
+
+    public function shippingService(): ShippingService
+    {
+        return $this->hybridShipment === null ? ShippingService::Electronic : ShippingService::Hybrid;
+    }
+
     public function textBody(): ?string
     {
         return $this->textBody;
@@ -192,9 +249,19 @@ final class OutgoingMessage
      */
     public function toPayload(string $senderAddress): array
     {
+        if ($this->paperRecipients !== [] && $this->hybridShipment === null) {
+            throw new InvalidArgumentException('Recipients given by postal address need a hybrid shipment; call withHybridShipment().');
+        }
         $metadata = ['from' => ['eDeliveryAddress' => Field::id('Sender address', $senderAddress)]];
-        if ($this->recipients !== []) {
-            $metadata['to'] = array_map(static fn(string $address): array => ['eDeliveryAddress' => $address], $this->recipients);
+        $to = [
+            ...array_map(static fn(string $address): array => ['eDeliveryAddress' => $address], $this->recipients),
+            ...array_map(static fn(PaperRecipient $recipient): array => $recipient->toPayload(), $this->paperRecipients),
+        ];
+        if ($to !== []) {
+            $metadata['to'] = $to;
+        }
+        if ($this->hybridShipment !== null) {
+            $metadata['hybridShipment'] = $this->hybridShipment->toPayload();
         }
         $metadata['subject'] = $this->subject;
         foreach (['threadId' => $this->threadId, 'refToMessageId' => $this->refToMessageId, 'caseId' => $this->caseId] as $name => $value) {
@@ -202,7 +269,7 @@ final class OutgoingMessage
                 $metadata[$name] = $value;
             }
         }
-        $metadata['shippingService'] = ShippingService::Electronic->value;
+        $metadata['shippingService'] = $this->shippingService()->value;
         if ($this->additionalData !== []) {
             $metadata['additionalData'] = $this->additionalData;
         }

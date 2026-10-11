@@ -336,11 +336,12 @@ final class UserAgentClient
     public const MAX_DELETED_DRAFTS = 50;
 
     /**
-     * Sends an electronic message (POST /{eDeliveryAddress}/messages). Requires the "write_messages" permission.
+     * Sends a message (POST /{eDeliveryAddress}/messages): electronic, or hybrid (printed and delivered on paper)
+     * when built with {@see OutgoingMessage::withHybridShipment()}. Requires the "write_messages" permission.
      *
-     * LEGAL EFFECT: an accepted message is a registered electronic delivery; deadlines and deemed delivery
-     * follow from it. The contract has no idempotency key, so this call is NEVER retried automatically,
-     * whatever the retry policy. After a {@see \B4x\Edoreczenia\Exception\TransportException} (e.g. a timeout)
+     * LEGAL EFFECT: an accepted message is a registered electronic delivery, or a hybrid shipment that is printed and
+     * posted; deadlines and deemed delivery follow from it. The contract has no idempotency key, so this call is
+     * NEVER retried automatically, whatever the retry policy. After a {@see \B4x\Edoreczenia\Exception\TransportException} (e.g. a timeout)
      * or a 5xx error the message may still have been accepted: look for it in the SENT folder
      * ({@see listMessages()}) before sending again. An {@see \B4x\Edoreczenia\Exception\UnexpectedResponseException}
      * carrying a 2xx status code means the server accepted the request but its answer could not be read: do not resend.
@@ -350,14 +351,15 @@ final class UserAgentClient
      *
      * Recipients are not checked by the SDK. Validate them first with the Search Engine API
      * (`$client->searchEngine()->findByAddresses([...])`) to avoid sending to inactive addresses.
+     * Postal addresses of hybrid recipients are only checked for the fields the contract requires.
      *
-     * Not yet verified against INT or PROD.
+     * Not yet verified against INT or PROD (hybrid shipments included).
      *
      * @throws EdoreczeniaException
      */
     public function sendMessage(OutgoingMessage $message): MessageTask
     {
-        if ($message->recipients() === []) {
+        if ($message->recipients() === [] && $message->paperRecipients() === []) {
             throw new InvalidArgumentException('A message needs at least one recipient.');
         }
 
