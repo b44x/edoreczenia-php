@@ -15,7 +15,8 @@ namespace B4x\Edoreczenia\Testing;
  * @internal the shape may change between releases; use the documented ids in your tests:
  *           mailbox {@see self::MAILBOX}, ADEs {@see self::ADDRESSES}, thread "T-1",
  *           messages {@see self::MESSAGE_ID} and {@see self::SENT_MESSAGE_ID}, evidences "EV-1".."EV-3",
- *           attachments "ATT-1" and "ATT-2" of {@see self::MESSAGE_ID}, pending message {@see self::PENDING_MESSAGE_ID}.
+ *           attachments "ATT-1" and "ATT-2" of {@see self::MESSAGE_ID}, pending message {@see self::PENDING_MESSAGE_ID},
+ *           recipients for sending {@see self::ACTIVE_RECIPIENT} and {@see self::INACTIVE_RECIPIENT}.
  */
 final class SyntheticData
 {
@@ -333,6 +334,12 @@ final class SyntheticData
         'ATT-1' => "%PDF-1.4\n% Synthetic attachment served by FakeEdoreczenia, not a document.\n%%EOF\n",
         'ATT-2' => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Synthetic attachment served by FakeEdoreczenia. -->\n<dane/>\n",
     ];
+
+    /** Recipient that FakeEdoreczenia accepts when sending (ACTIVE in {@see self::ADDRESSES}). */
+    public const ACTIVE_RECIPIENT = 'AE:PL-98765-43210-SFVYC-19';
+
+    /** Recipient that FakeEdoreczenia rejects in the send task (CLOSED_RECOVERABLE in {@see self::ADDRESSES}). */
+    public const INACTIVE_RECIPIENT = 'AE:PL-12345-67890-ABCDE-11';
 
     private function __construct() {}
 }

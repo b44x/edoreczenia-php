@@ -1,0 +1,32 @@
+{
+  "messageControlData": {
+    "messageType": "Message"
+  },
+  "messageMetadata": {
+    "from": { "eDeliveryAddress": "AE:PL-12345-67890-ABCDE-12" },
+    "to": [
+      { "eDeliveryAddress": "AE:PL-98765-43210-SFVYC-19" }
+    ],
+    "subject": "Wniosek",
+    "messageId": "0A1B2C3D-0000-4000-8000-0000000000D1",
+    "caseId": "ZNAK-SPRAWY.1.2026",
+    "timestamp": "2017-07-21T17:32:28Z",
+    "shippingService": "electronic"
+  },
+  "textBody": "Treść wiadomości roboczej",
+  "attachments": [
+    {
+      "order": 1,
+      "attachmentId": "D41568F4-7175-42BB-9503-DAA282180D70",
+      "file": {
+        "fileMetadata": {
+          "fileId": "D41568F4-7175-42BB-9503-DAA282180D70",
+          "filename": "document.pdf",
+          "contentType": "application/pdf",
+          "size": 1024,
+          "description": "Text document"
+        }
+      }
+    }
+  ]
+}

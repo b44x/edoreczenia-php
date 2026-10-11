@@ -1,0 +1,20 @@
+{
+  "messages": [
+    {
+      "messageControlData": {
+        "messageType": "Message"
+      },
+      "messageMetadata": {
+        "to": [
+          { "eDeliveryAddress": "AE:PL-98765-43210-SFVYC-19" }
+        ],
+        "subject": "Wniosek",
+        "messageId": "0A1B2C3D-0000-4000-8000-0000000000D1",
+        "timestamp": "2017-07-21T17:32:28Z",
+        "shippingService": "electronic"
+      }
+    }
+  ],
+  "resultSize": 1,
+  "total": 1
+}

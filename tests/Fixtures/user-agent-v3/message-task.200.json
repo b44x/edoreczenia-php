@@ -1,0 +1,14 @@
+[
+  {
+    "messageId": "0A1B2C3D-0000-4000-8000-000000000002",
+    "addressee": {
+      "eDeliveryAddress": "AE:PL-98765-43210-SFVYC-19",
+      "contributor": { "companyName": "MINISTERSTWO POCZT I TELEGRAFÓW" }
+    }
+  },
+  {
+    "addressee": { "eDeliveryAddress": "AE:PL-12345-67890-ABCDE-11" },
+    "error": "INVALID_RECIPIENT",
+    "error_description": "Adres nieaktywny"
+  }
+]

@@ -11,19 +11,30 @@ use B4x\Edoreczenia\Internal\PathSegment;
 use B4x\Edoreczenia\Internal\Payload;
 use B4x\Edoreczenia\Internal\Transport;
 use B4x\Edoreczenia\UserAgent\V3\Enum\EvidenceService;
+use B4x\Edoreczenia\UserAgent\V3\Enum\MessageTaskState;
 use B4x\Edoreczenia\UserAgent\V3\Model\Directory;
 use B4x\Edoreczenia\UserAgent\V3\Model\Download;
+use B4x\Edoreczenia\UserAgent\V3\Model\Draft;
 use B4x\Edoreczenia\UserAgent\V3\Model\Evidence;
 use B4x\Edoreczenia\UserAgent\V3\Model\EvidenceList;
+use B4x\Edoreczenia\UserAgent\V3\Model\FileInfo;
 use B4x\Edoreczenia\UserAgent\V3\Model\MailboxSettings;
 use B4x\Edoreczenia\UserAgent\V3\Model\MessageAttachment;
 use B4x\Edoreczenia\UserAgent\V3\Model\MessageList;
 use B4x\Edoreczenia\UserAgent\V3\Model\MessagePending;
+use B4x\Edoreczenia\UserAgent\V3\Model\MessageTask;
+use B4x\Edoreczenia\UserAgent\V3\Model\MessageTaskItem;
 use B4x\Edoreczenia\UserAgent\V3\Model\OpenedMessage;
+use B4x\Edoreczenia\UserAgent\V3\Model\SavedDraft;
 use B4x\Edoreczenia\UserAgent\V3\Model\Thread;
 use B4x\Edoreczenia\UserAgent\V3\Model\ThreadList;
+use B4x\Edoreczenia\UserAgent\V3\Model\UploadedAttachment;
+use B4x\Edoreczenia\UserAgent\V3\Request\AttachmentUpload;
+use B4x\Edoreczenia\UserAgent\V3\Request\DraftQuery;
 use B4x\Edoreczenia\UserAgent\V3\Request\EvidenceQuery;
 use B4x\Edoreczenia\UserAgent\V3\Request\MessageQuery;
+use B4x\Edoreczenia\UserAgent\V3\Request\OutgoingAttachment;
+use B4x\Edoreczenia\UserAgent\V3\Request\OutgoingMessage;
 use B4x\Edoreczenia\UserAgent\V3\Request\ThreadMessageQuery;
 use B4x\Edoreczenia\UserAgent\V3\Request\ThreadQuery;
 use Psr\Http\Message\ResponseInterface;
@@ -33,8 +44,8 @@ use Psr\Http\Message\ResponseInterface;
  *
  * Status: implemented from the official contract only, NOT yet verified against INT or PROD.
  *
- * Operations free of side effects are retried when a retry policy is configured. {@see openMessage()} has
- * legal effect and is never retried.
+ * Read-only operations are retried when a retry policy is configured. Opening a message, sending
+ * messages and drafts, and changing drafts have side effects and are never retried automatically.
  */
 final class UserAgentClient
 {
@@ -182,7 +193,7 @@ final class UserAgentClient
      */
     public function downloadAttachment(string $messageId, string $attachmentId): Download
     {
-        $response = $this->transport->postStream(
+        $response = $this->transport->postForStream(
             $this->baseUri . PathSegment::encode($this->mailboxAddress) . '/attachments/download',
             ['messageId' => self::id('Message id', $messageId), 'attachmentId' => self::id('Attachment id', $attachmentId)],
             'UA API v3 attachments/download',
@@ -317,6 +328,251 @@ final class UserAgentClient
         $path = 'evidences/' . PathSegment::encode(self::id('Message id', $messageId)) . '/technical-evidences-file';
 
         return Download::fromResponse($this->stream($path, [], 'evidences/{messageId}/technical-evidences-file'));
+    }
+
+    // --- Sending (legal effect) ---
+
+    /** Maximum number of drafts per {@see deleteDrafts()} call ("maxItems" of the path parameter). */
+    public const MAX_DELETED_DRAFTS = 50;
+
+    /**
+     * Sends an electronic message (POST /{eDeliveryAddress}/messages). Requires the "write_messages" permission.
+     *
+     * LEGAL EFFECT: an accepted message is a registered electronic delivery; deadlines and deemed delivery
+     * follow from it. The contract has no idempotency key, so this call is NEVER retried automatically,
+     * whatever the retry policy. After a {@see \B4x\Edoreczenia\Exception\TransportException} (e.g. a timeout)
+     * or a 5xx error the message may still have been accepted: look for it in the SENT folder
+     * ({@see listMessages()}) before sending again. An {@see \B4x\Edoreczenia\Exception\UnexpectedResponseException}
+     * carrying a 2xx status code means the server accepted the request but its answer could not be read: do not resend.
+     *
+     * Sending is asynchronous: the server answers HTTP 202 with a task id; follow it with {@see messageTaskStatus()}
+     * and {@see messageTask()}.
+     *
+     * Recipients are not checked by the SDK. Validate them first with the Search Engine API
+     * (`$client->searchEngine()->findByAddresses([...])`) to avoid sending to inactive addresses.
+     *
+     * Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function sendMessage(OutgoingMessage $message): MessageTask
+    {
+        if ($message->recipients() === []) {
+            throw new InvalidArgumentException('A message needs at least one recipient.');
+        }
+
+        return MessageTask::fromPayload(Payload::root($this->post('messages', $message->toPayload($this->mailboxAddress), 'POST messages')));
+    }
+
+    /**
+     * Per-recipient outcome of a send task (GET /{eDeliveryAddress}/messages/tasks/{messageTaskId}).
+     * Read-only, so it is retried when a retry policy is configured. Not yet verified against INT or PROD.
+     *
+     * @return list<MessageTaskItem>
+     *
+     * @throws EdoreczeniaException
+     */
+    public function messageTask(string $messageTaskId): array
+    {
+        $path = 'messages/tasks/' . PathSegment::encode(self::id('Message task id', $messageTaskId));
+
+        return array_map(MessageTaskItem::fromPayload(...), Payload::rootObjectList($this->get($path, [], 'messages/tasks/{messageTaskId}')));
+    }
+
+    /**
+     * Processing state of a send task (GET /{eDeliveryAddress}/messages/tasks/{messageTaskId}/status): PENDING or
+     * FINISHED; values unknown to this SDK version are returned as strings. FINISHED does not mean delivered.
+     * Read-only, so it is retried when a retry policy is configured. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function messageTaskStatus(string $messageTaskId): MessageTaskState|string
+    {
+        $path = 'messages/tasks/' . PathSegment::encode(self::id('Message task id', $messageTaskId)) . '/status';
+
+        return Payload::root($this->get($path, [], 'messages/tasks/{messageTaskId}/status'))->requiredEnumOrString('messageTaskStatus', MessageTaskState::class);
+    }
+
+    /**
+     * Lists drafts (GET /{eDeliveryAddress}/drafts) in "metadata" format. Read-only. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function listDrafts(?DraftQuery $query = null): MessageList
+    {
+        return MessageList::fromPayload(Payload::root($this->get('drafts', ($query ?? DraftQuery::create())->toQuery(), 'drafts')));
+    }
+
+    /**
+     * One draft with its text and attachment list (GET /{eDeliveryAddress}/drafts/{messageId}). Read-only.
+     * Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function getDraft(string $draftId): Draft
+    {
+        $data = $this->get('drafts/' . PathSegment::encode(self::id('Draft id', $draftId)), [], 'drafts/{messageId}');
+
+        return Draft::fromPayload(Payload::root($data));
+    }
+
+    /**
+     * Saves a new draft (POST /{eDeliveryAddress}/drafts); recipients may still be missing. Nothing is sent.
+     * Creates server state, so it is never retried automatically. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function createDraft(OutgoingMessage $message): SavedDraft
+    {
+        return SavedDraft::fromPayload(Payload::root($this->post('drafts', $message->toPayload($this->mailboxAddress), 'POST drafts')));
+    }
+
+    /**
+     * Replaces the content of a draft (PUT /{eDeliveryAddress}/drafts/{messageId}). Nothing is sent.
+     * Never retried automatically. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function updateDraft(string $draftId, OutgoingMessage $message): SavedDraft
+    {
+        $path = 'drafts/' . PathSegment::encode(self::id('Draft id', $draftId));
+        $data = $this->transport->putJson($this->mailboxUri($path), $message->toPayload($this->mailboxAddress), 'UA API v3 PUT drafts/{messageId}', false, [$this->mailboxAddress]);
+
+        return SavedDraft::fromPayload(Payload::root($data));
+    }
+
+    /**
+     * Deletes up to 50 drafts at once (DELETE /{eDeliveryAddress}/drafts/{messageId}, ids joined with ",").
+     * Never retried automatically. Not yet verified against INT or PROD.
+     *
+     * @return list<string> ids of the deleted drafts, as reported by the server
+     *
+     * @throws EdoreczeniaException
+     */
+    public function deleteDrafts(string $draftId, string ...$more): array
+    {
+        $ids = [$draftId, ...$more];
+        if (\count($ids) > self::MAX_DELETED_DRAFTS) {
+            throw new InvalidArgumentException(\sprintf('At most %d drafts can be deleted at once.', self::MAX_DELETED_DRAFTS));
+        }
+        $segments = [];
+        foreach ($ids as $id) {
+            if (str_contains(self::id('Draft id', $id), ',')) {
+                throw new InvalidArgumentException('Draft id must not contain ",".');
+            }
+            $segments[] = PathSegment::encode($id);
+        }
+
+        $data = $this->delete('drafts/' . implode(',', $segments), 'DELETE drafts/{messageId}');
+        $deleted = array_map(static fn(Payload $item): ?string => $item->optionalString('messageId'), Payload::rootObjectList($data));
+
+        return array_values(array_filter($deleted, static fn(?string $id): bool => $id !== null));
+    }
+
+    /**
+     * Adds a file of up to {@see OutgoingAttachment::MAX_INLINE_BYTES} to a draft, base64-encoded in JSON
+     * (POST /{eDeliveryAddress}/drafts/{messageId}/attachments). Never retried automatically.
+     * Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function addDraftAttachment(string $draftId, OutgoingAttachment $attachment): UploadedAttachment
+    {
+        $path = 'drafts/' . PathSegment::encode(self::id('Draft id', $draftId)) . '/attachments';
+
+        return UploadedAttachment::fromPayload(Payload::root($this->post($path, $attachment->toFileData(), 'POST drafts/{messageId}/attachments')));
+    }
+
+    /**
+     * Uploads a large file to a draft as multipart/form-data (POST /{eDeliveryAddress}/{messageId}/attachments/upload),
+     * streaming it from the given PSR-7 stream without buffering it. Never retried automatically.
+     * Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function uploadDraftAttachment(string $draftId, AttachmentUpload $upload): UploadedAttachment
+    {
+        $boundary = 'b4x-' . bin2hex(random_bytes(16));
+        $data = $this->transport->postStreamBody(
+            $this->mailboxUri(PathSegment::encode(self::id('Draft id', $draftId)) . '/attachments/upload'),
+            $upload->toMultipart($boundary),
+            'multipart/form-data; boundary=' . $boundary,
+            'UA API v3 POST {messageId}/attachments/upload',
+            [$this->mailboxAddress],
+        );
+
+        return UploadedAttachment::fromPayload(Payload::root($data));
+    }
+
+    /**
+     * Removes one attachment from a draft (DELETE /{eDeliveryAddress}/drafts/{messageId}/attachments/{attachmentId}).
+     * Never retried automatically. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function deleteDraftAttachment(string $draftId, string $attachmentId): FileInfo
+    {
+        $path = 'drafts/' . PathSegment::encode(self::id('Draft id', $draftId)) . '/attachments/' . PathSegment::encode(self::id('Attachment id', $attachmentId));
+
+        return FileInfo::fromPayload(Payload::root($this->delete($path, 'DELETE drafts/{messageId}/attachments/{attachmentId}')));
+    }
+
+    /**
+     * Removes all attachments from a draft (DELETE /{eDeliveryAddress}/drafts/{messageId}/attachments).
+     * Never retried automatically. Not yet verified against INT or PROD.
+     *
+     * @return list<FileInfo> the removed files
+     *
+     * @throws EdoreczeniaException
+     */
+    public function deleteDraftAttachments(string $draftId): array
+    {
+        $path = 'drafts/' . PathSegment::encode(self::id('Draft id', $draftId)) . '/attachments';
+
+        return array_map(FileInfo::fromPayload(...), Payload::rootObjectList($this->delete($path, 'DELETE drafts/{messageId}/attachments')));
+    }
+
+    /**
+     * Sends a saved draft (POST /{eDeliveryAddress}/drafts/send). Requires the "write_messages" permission.
+     *
+     * LEGAL EFFECT, exactly like {@see sendMessage()}: NEVER retried automatically, and after a transport or 5xx
+     * error the message may still have been accepted; check the SENT folder before sending again.
+     * Validate the recipients with the Search Engine API first. Not yet verified against INT or PROD.
+     *
+     * @throws EdoreczeniaException
+     */
+    public function sendDraft(string $draftId): MessageTask
+    {
+        $data = $this->post('drafts/send', ['messageId' => self::id('Draft id', $draftId)], 'POST drafts/send');
+
+        return MessageTask::fromPayload(Payload::root($data));
+    }
+
+    private function mailboxUri(string $path): string
+    {
+        return $this->baseUri . PathSegment::encode($this->mailboxAddress) . '/' . $path;
+    }
+
+    /**
+     * Side-effecting POST: never retried, whatever the retry policy.
+     *
+     * @param array<mixed> $payload
+     *
+     * @return array<mixed>
+     */
+    private function post(string $path, array $payload, string $operation): array
+    {
+        return $this->transport->postJson($this->mailboxUri($path), $payload, 'UA API v3 ' . $operation, false, [$this->mailboxAddress]);
+    }
+
+    /**
+     * Side-effecting DELETE: never retried, whatever the retry policy.
+     *
+     * @return array<mixed>
+     */
+    private function delete(string $path, string $operation): array
+    {
+        return $this->transport->deleteJson($this->mailboxUri($path), 'UA API v3 ' . $operation, false, [$this->mailboxAddress]);
     }
 
     /**

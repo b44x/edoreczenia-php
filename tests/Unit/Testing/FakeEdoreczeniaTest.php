@@ -458,7 +458,7 @@ final class FakeEdoreczeniaTest extends TestCase
     public function testNonGetUserAgentRequestsAreRejected(): void
     {
         $this->fake->acceptToken('t');
-        foreach (['POST' => '/messages', 'PUT' => '/messages/' . self::MESSAGE_ID, 'PATCH' => '/messages/' . self::MESSAGE_ID, 'DELETE' => '/messages/' . self::MESSAGE_ID] as $method => $path) {
+        foreach (['POST' => '/messages/' . self::MESSAGE_ID, 'PUT' => '/messages/' . self::MESSAGE_ID, 'PATCH' => '/messages/' . self::MESSAGE_ID, 'DELETE' => '/messages/' . self::MESSAGE_ID] as $method => $path) {
             $response = $this->fake->sendRequest(
                 Http::factory()->createRequest($method, 'https://uaapi-int-ow.poczta-polska.pl/api/v3/' . self::MAILBOX . $path)->withHeader('Authorization', 'Bearer t'),
             );

@@ -33,13 +33,19 @@ use Psr\Http\Message\StreamFactoryInterface;
  *
  * Opening a message (format "full" or "fullExtended") is recorded: the message is listed as opened
  * afterwards. {@see SyntheticData::PENDING_MESSAGE_ID} answers HTTP 202 to its first opening. Attachments
- * are served as JSON and through POST attachments/download. Any other non-GET request to the User Agent API
- * fails with HTTP 405, so such a request in your tests means something bypassed the SDK.
+ * are served as JSON and through POST attachments/download.
  *
- * Token lifetimes are not enforced and the data is otherwise static: it is a test double, not a simulator.
+ * Sending, send tasks and drafts are emulated in memory (see {@see FakeSendingRoutes}); messages
+ * accepted for sending are recorded and returned by {@see sentMessages()}. Any other non-GET request
+ * to the User Agent API fails with HTTP 405, because the SDK does not issue it.
+ *
+ * Token lifetimes are not enforced; only opened flags, sending and drafts keep state, per instance:
+ * it is a test double, not a simulator.
  */
 final class FakeEdoreczenia implements ClientInterface
 {
+    use FakeSendingRoutes;
+
     public const DEFAULT_MAILBOX = SyntheticData::MAILBOX;
 
     private const ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
@@ -154,7 +160,7 @@ final class FakeEdoreczenia implements ClientInterface
             }
         }
 
-        return $this->userAgent($request, $segments, $path);
+        return $this->sendingRoute($request, $segments, $path) ?? $this->userAgent($request, $segments, $path);
     }
 
     private function token(RequestInterface $request): ResponseInterface
@@ -315,7 +321,7 @@ final class FakeEdoreczenia implements ClientInterface
         }
         if ($request->getMethod() !== 'GET') {
             return $this->uaError(405, 'method_not_allowed', \sprintf(
-                '%s %s: not supported; the SDK does not send or delete messages.',
+                '%s %s is not supported by FakeEdoreczenia.',
                 $request->getMethod(),
                 $path,
             ));

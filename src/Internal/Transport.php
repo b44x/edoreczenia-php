@@ -15,6 +15,7 @@ use Psr\Http\Client\NetworkExceptionInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\StreamInterface;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -109,9 +110,49 @@ final class Transport
      * @param array<mixed> $payload
      * @param list<string> $maskedSegments
      */
-    public function postStream(string $uri, array $payload, string $operation, bool $safeToRetry, array $maskedSegments = []): ResponseInterface
+    public function postForStream(string $uri, array $payload, string $operation, bool $safeToRetry, array $maskedSegments = []): ResponseInterface
     {
         return $this->exchange('POST', $uri, Json::encode($payload), $operation, $safeToRetry, $maskedSegments, '*/*');
+    }
+
+    /**
+     * @param array<mixed> $payload
+     * @param bool         $safeToRetry true only for operations without side effects
+     * @param list<string> $maskedSegments
+     *
+     * @return array<mixed> decoded JSON body of a 2xx response
+     */
+    public function putJson(string $uri, array $payload, string $operation, bool $safeToRetry, array $maskedSegments = []): array
+    {
+        return $this->send('PUT', $uri, Json::encode($payload), $operation, $safeToRetry, $maskedSegments);
+    }
+
+    /**
+     * @param bool         $safeToRetry true only for operations without side effects
+     * @param list<string> $maskedSegments
+     *
+     * @return array<mixed> decoded JSON body of a 2xx response
+     */
+    public function deleteJson(string $uri, string $operation, bool $safeToRetry, array $maskedSegments = []): array
+    {
+        return $this->send('DELETE', $uri, null, $operation, $safeToRetry, $maskedSegments);
+    }
+
+    /**
+     * POST of a streamed body (e.g. multipart/form-data) that is handed to the HTTP client as-is.
+     *
+     * Never retried: a partially consumed stream cannot be replayed reliably.
+     *
+     * @param string       $contentType full Content-Type header, including the multipart boundary
+     * @param list<string> $maskedSegments
+     *
+     * @return array<mixed> decoded JSON body of a 2xx response
+     */
+    public function postStreamBody(string $uri, StreamInterface $body, string $contentType, string $operation, array $maskedSegments = []): array
+    {
+        $response = $this->exchange('POST', $uri, $body, $operation, false, $maskedSegments, 'application/json', $contentType);
+
+        return Json::decodeResponse($response, $operation);
     }
 
     /**
@@ -145,7 +186,7 @@ final class Transport
      *
      * @param list<string> $maskedSegments
      */
-    private function exchange(string $method, string $uri, ?string $body, string $operation, bool $safeToRetry, array $maskedSegments, string $accept): ResponseInterface
+    private function exchange(string $method, string $uri, StreamInterface|string|null $body, string $operation, bool $safeToRetry, array $maskedSegments, string $accept, string $contentType = 'application/json'): ResponseInterface
     {
         $maxRetries = $safeToRetry ? $this->retryPolicy->maxRetries : 0;
         $logUri = self::redactUri($uri, $maskedSegments);
@@ -158,8 +199,8 @@ final class Transport
                 ->withHeader('User-Agent', self::USER_AGENT);
             if ($body !== null) {
                 $request = $request
-                    ->withHeader('Content-Type', 'application/json')
-                    ->withBody($this->streamFactory->createStream($body));
+                    ->withHeader('Content-Type', $contentType)
+                    ->withBody(\is_string($body) ? $this->streamFactory->createStream($body) : $body);
             }
 
             $started = hrtime(true);
