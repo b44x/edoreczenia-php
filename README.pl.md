@@ -8,11 +8,11 @@
 
 Nieoficjalne, niezależne od frameworków SDK dla PHP do **e-Doręczeń** – publicznej usługi rejestrowanego doręczenia
 elektronicznego. Implementuje udokumentowane **uwierzytelnienie system-system** (podpisany JWT, RFC 7523), **Search Engine API v4**
-oraz część tylko-do-odczytu **User Agent API v3** (skrzynka).
+oraz **User Agent API v3** (skrzynka: odczyt, odbiór i wysyłka – dwa ostatnie eksperymentalnie).
 
 🇬🇧 English version: [README.md](README.md)
 
-> **Status: 0.3 (wersja przedpremierowa).** Zbudowane i przetestowane wyłącznie na podstawie oficjalnych specyfikacji;
+> **Status: 0.4 (wersja przedpremierowa).** Zbudowane i przetestowane wyłącznie na podstawie oficjalnych specyfikacji;
 > **jeszcze niezweryfikowane na żywym środowisku INT ani PROD**. Projekt nie jest powiązany z Ministerstwem Cyfryzacji,
 > COI ani Pocztą Polską, nie jest przez nie zatwierdzony ani certyfikowany. Nie jest gotowy do produkcji.
 
@@ -22,7 +22,7 @@ oraz część tylko-do-odczytu **User Agent API v3** (skrzynka).
 |---|---|
 | Uwierzytelnienie | OIDC `client_credentials` z asercją JWT podpisaną kluczem systemu (RS256), ponowne użycie tokenu zgodnie z instrukcją integracji, opcjonalne współdzielenie przez cache PSR-16 |
 | Search Engine API v4 (kontrakt 4.0.5) | wyszukiwanie po danych podmiotu lub ADE (`bae_search`), masowa weryfikacja do 1000 ADE (`eda-search`), dane własnego adresu (`eda-confirmation`) |
-| User Agent API v3 (kontrakt 3.0.8) | tylko odczyt: słownik krajów, foldery i liczniki, ustawienia, lista wiadomości (`minimal`/`metadata`), wątki, dowody (listy i strumieniowe pobieranie XML/PDF). Odbiór, wysyłka i usuwanie – w planie |
+| User Agent API v3 (kontrakt 3.0.8) | słownik krajów, foldery i liczniki, ustawienia, lista wiadomości, wątki, dowody (listy i strumieniowe pobieranie XML/PDF); **eksperymentalnie:** otwieranie wiadomości, strumieniowe pobieranie załączników, wysyłka, zadania wysyłki i wersje robocze. Przesyłki hybrydowe i usuwanie wiadomości – w planie |
 | Środowiska | produkcyjne i integracyjne (INT), wybierane jawnie – nie ma wartości domyślnej |
 | HTTP | dowolny klient PSR-18 (Guzzle, Symfony HttpClient…), wykrywany automatycznie, jeśli go nie podasz; brak zależności od frameworka |
 | Narzędzia | `vendor/bin/edoreczenia keygen` (klucz + CSR) i `doctor` (sprawdzenie konfiguracji od początku do końca); `FakeEdoreczenia` – atrapa usługi do testów |
@@ -90,7 +90,7 @@ Wyszukiwanie bez wyników kończy się wyjątkiem `NotFoundException` z kodem `S
 Reguły dotyczące wymaganych kombinacji atrybutów dla kategorii wyszukiwania (R.SEAPI.01) egzekwuje serwer;
 SDK sprawdza przed wysłaniem ograniczenia z kontraktu (długości, liczności, rozmiar strony).
 
-### Skrzynka (UA API v3, tylko odczyt)
+### Skrzynka (UA API v3)
 
 ```php
 use B4x\Edoreczenia\UserAgent\V3\Enum\ListFormat;
@@ -112,9 +112,57 @@ $plik = $client->userAgent()->downloadEvidence(EvidenceService::Purde, $dowod->e
 $plik->saveTo('/archiwum/' . $dowod->evidenceId . '.xml');   // oryginał XML archiwizuj bez zmian
 ```
 
-Pobranie listy nie otwiera wiadomości. Otwarcie wiadomości (pobranie w trybie `full`) oznacza ją jako odczytaną,
-a u adresatów niepublicznych uruchamia wystawienie dowodu doręczenia ze skutkiem prawnym – ta operacja dostanie
-osobną, jednoznacznie nazwaną metodę.
+Pobranie listy nie otwiera wiadomości. Otwieranie, pobieranie załączników i wysyłka – poniżej.
+
+### Odbiór i wysyłka wiadomości (eksperymentalne, skutek prawny)
+
+> **Eksperymentalne – jeszcze niezweryfikowane na INT ani PROD.** Te operacje wywołują **skutki prawne**. Są zgodne
+> z oficjalnym kontraktem, pokryte testami jednostkowymi i kontraktowymi i nigdy nie są ponawiane automatycznie,
+> ale żadne wywołanie nie trafiło jeszcze do prawdziwego serwera. Sprawdź je najpierw na INT i zgłoś wynik.
+
+**Otwarcie wiadomości** oznacza ją jako otwartą, a u odbiorców niepublicznych uruchamia jej przekazanie i dowód
+doręczenia E.1 – wiadomość uznaje się za doręczoną. Do przeglądania bez tego skutku służy `listMessages()`.
+
+```php
+use B4x\Edoreczenia\UserAgent\V3\Model\MessagePending;
+
+$wiadomosc = $client->userAgent()->openMessage($messageId);
+if ($wiadomosc instanceof MessagePending) {
+    return;                                     // HTTP 202: trwa przekazanie, otwórz ponownie później
+}
+
+foreach ($wiadomosc->attachments as $zalacznik) {
+    $client->userAgent()->downloadAttachment($messageId, (string) $zalacznik->attachmentId)   // strumieniowo
+        ->saveTo('/bezpieczny/katalog/' . ($zalacznik->safeFileName() ?? $zalacznik->attachmentId));
+}
+```
+
+SDK otwiera jedną wiadomość na wywołanie, choć kontrakt pozwala na 50 naraz – literówka nie „doręczy” kilkudziesięciu pism.
+
+**Wysyłka** jest asynchroniczna: API przyjmuje wiadomość (HTTP 202) i zwraca zadanie, którego stan się odpytuje.
+
+```php
+use B4x\Edoreczenia\UserAgent\V3\Request\OutgoingAttachment;
+use B4x\Edoreczenia\UserAgent\V3\Request\OutgoingMessage;
+
+$zadanie = $client->userAgent()->sendMessage(
+    OutgoingMessage::create('Wniosek o informację')
+        ->withRecipients('AE:PL-98765-43210-SFVYC-19')
+        ->withTextBody('Treść wiadomości')
+        ->withAttachment(OutgoingAttachment::fromStream($pdf, 'wniosek.pdf', 'application/pdf')),
+);
+// następnie messageTaskStatus($zadanie->messageTaskId) aż do MessageTaskState::Finished
+// i messageTask($zadanie->messageTaskId) – wynik dla każdego adresata
+```
+
+- `sendMessage()` i `sendDraft()` **nigdy nie są ponawiane**, nawet przy włączonej polityce ponowień – API nie ma
+  klucza idempotencji. Po przekroczeniu czasu lub błędzie 5xx sprawdź folder SENT, zanim wyślesz ponownie.
+- Adresatów sprawdź wcześniej przez `searchEngine()->findByAddresses([...])`.
+- `FINISHED` oznacza przetworzenie zadania, a nie doręczenie – sprawdź wynik każdego adresata.
+- Załączniki w treści żądania: do 15 MB. Większe pliki dodaj do wersji roboczej przez `uploadDraftAttachment()` (strumieniowo).
+- Wersje robocze: `createDraft()`, `getDraft()`, `listDrafts()`, `updateDraft()`, `deleteDrafts()`, `addDraftAttachment()`,
+  `uploadDraftAttachment()`, `deleteDraftAttachment()`, `deleteDraftAttachments()`, `sendDraft()`.
+- Jeszcze nieobsługiwane: przesyłki hybrydowe (papierowe), usuwanie odebranych wiadomości, archiwa.
 
 ## Status weryfikacji – szukamy pomocy
 
@@ -136,13 +184,13 @@ i zgłoś wynik przez szablon [INT verification report](https://github.com/b44x/
 - **Logi** (PSR-3) nie zawierają nagłówków, query stringów, treści żądań i odpowiedzi, tokenów ani kluczy –
   tylko operację, ścieżkę, status, czasy, kody błędów i identyfikator zdarzenia (przydatny do zgłoszeń w ITSM Atmosfera).
 - **Ponawianie** jest domyślnie wyłączone; po włączeniu (`RetryPolicy::exponential()`) obejmuje tylko operacje
-  tylko-do-odczytu. Wysyłka i odczyt wiadomości w UA API (skutki prawne) nigdy nie będą ponawiane automatycznie.
+  tylko-do-odczytu. Otwieranie i wysyłka wiadomości oraz zmiany wersji roboczych (skutki prawne) nigdy nie są ponawiane automatycznie.
 - Nieznane SDK wartości enumów są zwracane jako `string`, więc nowe wartości po stronie serwera nie psują aplikacji.
 
 ## Testowanie integracji
 
-`FakeEdoreczenia` to działający w pamięci klient PSR-18, który odpowiada jak serwer tokenów, SE API v4 i część
-tylko-do-odczytu UA API v3 – na **danych syntetycznych**, bez dostępu do sieci:
+`FakeEdoreczenia` to działający w pamięci klient PSR-18, który odpowiada jak serwer tokenów, SE API v4 i UA API v3
+(łącznie z otwieraniem, wysyłką i wersjami roboczymi; `sentMessages()` zwraca wysłane wiadomości) – na **danych syntetycznych**, bez dostępu do sieci:
 
 ```php
 use B4x\Edoreczenia\Testing\FakeEdoreczenia;

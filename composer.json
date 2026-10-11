@@ -1,6 +1,6 @@
 {
     "name": "b44x/edoreczenia",
-    "description": "Unofficial, framework-agnostic PHP SDK for the Polish e-Doręczenia (e-Delivery) APIs: signed-JWT system authentication, Search Engine API v4 and read-only User Agent API v3.",
+    "description": "Unofficial, framework-agnostic PHP SDK for the Polish e-Doręczenia (e-Delivery) APIs: signed-JWT system authentication, Search Engine API v4 and User Agent API v3 (mailbox, sending and receiving).",
     "type": "library",
     "license": "MIT",
     "keywords": [

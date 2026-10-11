@@ -9,9 +9,9 @@ use B4x\Edoreczenia\Exception\InvalidArgumentException;
 /**
  * Bounded retry with exponential backoff and jitter.
  *
- * Retries are applied only to operations the SDK marks as safe to repeat (currently the
- * read-only Search Engine API queries) and only for network failures and HTTP 429/500/502/503/504.
- * Token requests and any operation with side effects are never retried automatically.
+ * Retries are applied only to operations the SDK marks as safe to repeat (read-only queries and
+ * downloads) and only for network failures and HTTP 429/500/502/503/504. Token requests and any
+ * operation with side effects (opening and sending messages, changing drafts) are never retried.
  *
  * The default is {@see none()}: retrying blocks the calling process, so it is opt-in.
  */

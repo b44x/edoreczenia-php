@@ -8,11 +8,11 @@
 
 Unofficial, framework-agnostic PHP SDK for **e-Doręczenia**, Poland's public electronic registered delivery service.
 It implements the documented **system-to-system authentication** (signed JWT, RFC 7523), the **Search Engine API v4**
-and the read-only part of the **User Agent API v3** (mailbox).
+and the **User Agent API v3** (mailbox: reading, receiving and sending — the last two experimental).
 
 🇵🇱 Polska wersja: [README.pl.md](README.pl.md)
 
-> **Status: 0.3 (pre-release).** Built and tested against the official specifications only; **not yet verified against
+> **Status: 0.4 (pre-release).** Built and tested against the official specifications only; **not yet verified against
 > the live INT or PROD environments**. Not affiliated with, endorsed or certified by the Ministry of Digital Affairs, COI or
 > Poczta Polska. Not production-ready.
 
@@ -22,7 +22,7 @@ and the read-only part of the **User Agent API v3** (mailbox).
 |---|---|
 | Authentication | OIDC `client_credentials` with signed JWT client assertion (RS256), token reuse per the official rules, optional PSR-16 sharing between processes |
 | Search Engine API v4 (contract 4.0.5) | search by holder data or ADE (`bae_search`), bulk lookup of up to 1000 ADE (`eda-search`), own address data (`eda-confirmation`) |
-| User Agent API v3 (contract 3.0.8) | read-only: countries, folders and counts, settings, message list (`minimal`/`metadata`), threads, evidences (lists and streamed XML/PDF downloads). Reading, sending and deleting messages are planned |
+| User Agent API v3 (contract 3.0.8) | countries, folders and counts, settings, message list, threads, evidences (lists and streamed XML/PDF downloads); **experimental:** opening messages, streamed attachment downloads, sending, send tasks and drafts. Hybrid (paper) shipments and deleting messages are planned |
 | Environments | production and integration (INT), selected explicitly — there is no default |
 | HTTP | any PSR-18 client (Guzzle, Symfony HttpClient, …), detected automatically when not passed; no framework dependency |
 | Tooling | `vendor/bin/edoreczenia keygen` (key + CSR) and `doctor` (end-to-end configuration check); `FakeEdoreczenia` in-memory fake for your tests |
@@ -110,7 +110,7 @@ $se->getOwnAddressDetails();                                                    
 Which attribute combinations each category requires (rule R.SEAPI.01) is enforced by the server; the SDK validates
 contract-level constraints (lengths, counts, page size) before sending.
 
-### Mailbox (UA API v3, read-only)
+### Mailbox (UA API v3)
 
 ```php
 use B4x\Edoreczenia\UserAgent\V3\Enum\ListFormat;
@@ -152,8 +152,69 @@ foreach ($ua->messageEvidences($messageId, EvidenceQuery::create()->ofType(Evide
 }
 ```
 
-Listing never opens messages. Opening a message (fetching it in `full` mode) marks it as read and, for non-public
-recipients, triggers delivery evidence with legal effect — that operation will get its own, explicitly named method.
+Listing never opens messages. Opening, receiving attachments and sending are described below.
+
+### Receiving and sending messages (experimental, legal effect)
+
+> **Experimental — not yet verified against INT or PROD.** These operations have **legal effect**. They follow the
+> official contract, are covered by unit and contract tests, and are never retried automatically, but no call has
+> reached a real server yet. Try them on INT first and report the result.
+
+**Opening a message** marks it as opened and, for non-public recipients, triggers its transfer and the E.1 delivery
+evidence: the message counts as delivered. Use `listMessages()` to browse without this effect.
+
+```php
+use B4x\Edoreczenia\UserAgent\V3\Model\MessagePending;
+
+$opened = $ua->openMessage($messageId);
+if ($opened instanceof MessagePending) {
+    return;                                     // HTTP 202: transfer in progress, open it again later
+}
+
+echo $opened->metadata->subject, PHP_EOL, $opened->textBody, PHP_EOL;
+foreach ($opened->attachments as $attachment) {
+    $ua->downloadAttachment($messageId, (string) $attachment->attachmentId)   // streamed, not buffered
+        ->saveTo('/secure/dir/' . ($attachment->safeFileName() ?? $attachment->attachmentId));
+}
+```
+
+The SDK opens one message per call, although the contract allows up to 50 ids at once, so a typo cannot deliver
+dozens of messages.
+
+**Sending** is asynchronous: the API accepts the message (HTTP 202) and returns a task to poll.
+
+```php
+use B4x\Edoreczenia\UserAgent\V3\Enum\MessageTaskState;
+use B4x\Edoreczenia\UserAgent\V3\Request\OutgoingAttachment;
+use B4x\Edoreczenia\UserAgent\V3\Request\OutgoingMessage;
+
+$client->searchEngine()->findByAddresses(['AE:PL-98765-43210-SFVYC-19']);   // check recipients first
+
+$task = $ua->sendMessage(
+    OutgoingMessage::create('Wniosek o informację')
+        ->withRecipients('AE:PL-98765-43210-SFVYC-19')
+        ->withTextBody('Treść wiadomości')
+        ->withAttachment(OutgoingAttachment::fromStream($pdfStream, 'wniosek.pdf', 'application/pdf')),
+);
+
+for ($i = 0; $task->messageTaskId !== null && $i < 30; ++$i) {
+    if ($ua->messageTaskStatus($task->messageTaskId) === MessageTaskState::Finished) {
+        foreach ($ua->messageTask($task->messageTaskId) as $result) {
+            echo $result->recipientAddress, ': ', $result->isAccepted() ? $result->messageId : $result->error, PHP_EOL;
+        }
+        break;
+    }
+    sleep(2);
+}
+```
+
+- `sendMessage()` and `sendDraft()` are **never retried**, even with a retry policy: the API has no idempotency key.
+  After a timeout or a 5xx error, check the SENT folder before sending again.
+- `FINISHED` means the server processed the task, not that the message was delivered; check each result.
+- Inline attachments are limited to 15 MB. Larger files go into a draft with `uploadDraftAttachment()` (streamed).
+- Drafts: `createDraft()`, `getDraft()`, `listDrafts()`, `updateDraft()`, `deleteDrafts()`, `addDraftAttachment()`,
+  `uploadDraftAttachment()`, `deleteDraftAttachment()`, `deleteDraftAttachments()`, `sendDraft()`.
+- Not supported yet: hybrid (paper) shipments, deleting received messages, archives.
 
 ## Error handling
 
@@ -206,12 +267,13 @@ EDORECZENIA_INT_ADDRESS=AE:PL-… EDORECZENIA_INT_SYSTEM=EZD1 EDORECZENIA_INT_KE
   300 s — use a private store.
 - **Logging:** pass a PSR-3 logger. The SDK logs operation, endpoint path, status, timings, error codes and event ids — never
   headers, query strings, bodies, tokens or keys.
-- **Retries** are off by default and, when enabled, apply only to read-only operations.
+- **Retries** are off by default and, when enabled, apply only to read-only operations — never to opening, sending or
+  changing drafts.
 
 ## Testing your integration
 
-`FakeEdoreczenia` is an in-memory PSR-18 client that answers like the token endpoint, SE API v4 and the read-only
-UA API v3, with **synthetic data** and without any network access:
+`FakeEdoreczenia` is an in-memory PSR-18 client that answers like the token endpoint, SE API v4 and UA API v3
+(including opening, sending and drafts; `sentMessages()` returns what was sent), with **synthetic data** and without any network access:
 
 ```php
 use B4x\Edoreczenia\Testing\FakeEdoreczenia;

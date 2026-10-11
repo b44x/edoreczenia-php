@@ -5,6 +5,39 @@ and the project uses [Semantic Versioning](https://semver.org/) (during 0.x, a m
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-11
+
+Receiving and sending messages. **Experimental: these operations have legal effect and are not yet verified against
+the INT or PROD environments.** They are never retried automatically, even with a retry policy.
+
+### Added
+
+- Receiving (UA API v3):
+  - `userAgent()->openMessage($id, extended: false)` opens one message. This marks it as opened and, for non-public
+    recipients, triggers the E.1 delivery evidence. HTTP 202 (transfer pending) returns `MessagePending`.
+  - `downloadAttachment()` streams an attachment (`POST /attachments/download`); `getAttachment()` returns it with
+    Base64 content embedded in JSON (small files only).
+  - Models `OpenedMessage`, `MessageAttachment`, `MessagePending`.
+- Sending (UA API v3):
+  - `sendMessage(OutgoingMessage)` returns a `MessageTask`; `messageTaskStatus()` and `messageTask()` poll it
+    (read-only, retry-safe) and report the result per recipient.
+  - Drafts: `createDraft()`, `getDraft()`, `listDrafts(DraftQuery)`, `updateDraft()`, `deleteDrafts()`,
+    `addDraftAttachment()`, `uploadDraftAttachment()` (streamed multipart for files over 15 MB),
+    `deleteDraftAttachment()`, `deleteDraftAttachments()`, `sendDraft()`.
+  - Builders `OutgoingMessage`, `OutgoingAttachment` (inline, up to 15 MB) and `AttachmentUpload`, validated
+    before any request.
+- `FakeEdoreczenia` emulates opening, attachment downloads, sending, send tasks and drafts; `sentMessages()` returns
+  the accepted messages.
+
+### Changed
+
+- The SDK opens one message per call and rejects ids containing ",", although the contract allows up to 50 ids.
+- Package description and retry policy documentation cover the new operations.
+
+### Not yet supported
+
+- Hybrid (paper) shipments, deleting received messages, archives, notifications and subscriptions.
+
 ## [0.3.0] - 2026-10-10
 
 Developer experience: automatic HTTP client detection, a test fake and a command line tool.
@@ -66,7 +99,8 @@ First public pre-release. **Not yet verified against the INT or PROD environment
 - `composer specs:fetch`: hash-verified download of the official contracts; contract test suite.
 - README in English and Polish, contribution guide and security policy.
 
-[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/b44x/edoreczenia-php/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/b44x/edoreczenia-php/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/b44x/edoreczenia-php/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/b44x/edoreczenia-php/releases/tag/v0.2.1
 [0.2.0]: https://github.com/b44x/edoreczenia-php/commit/34db3797e72ae943b8cb35bf18e90c3b12bd77d8
